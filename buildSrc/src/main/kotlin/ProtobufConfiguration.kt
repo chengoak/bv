@@ -38,7 +38,7 @@ object ProtobufConfiguration {
         val protoFiles = mutableSetOf<String>()
         rootDir.walk().forEach {
             if (it.isFile && it.extension == "proto") {
-                val path=it.relativeTo(rootDir).path.replace("\\", "/")
+                val path = it.relativeTo(rootDir).invariantSeparatorsPath
                 protoFiles.add(path)
             }
         }
