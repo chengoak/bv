@@ -65,12 +65,11 @@ class MaterialShapeRenderer {
                 runCatching { srcImgSvg.constantState!!.newDrawable().mutate() }
                     .getOrDefault(srcImgSvg)
             } else srcImgSvg
-            val drawable = vectorDrawable as Drawable
             val rect = Rect()
             rectF.round(rect)
-            drawable.bounds = rect
-            drawable.colorFilter = paint.colorFilter
-            drawable.draw(this)
+            vectorDrawable.bounds = rect
+            vectorDrawable.colorFilter = paint.colorFilter
+            vectorDrawable.draw(this)
         }
     }
 
