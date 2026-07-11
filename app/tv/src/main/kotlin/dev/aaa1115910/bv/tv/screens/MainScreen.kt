@@ -12,9 +12,14 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -26,11 +31,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.DrawerValue
+import androidx.tv.material3.Icon
 import androidx.tv.material3.NavigationDrawer
 import androidx.tv.material3.rememberDrawerState
+import coil.compose.AsyncImage
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.tv.component.UserPanel
 import dev.aaa1115910.bv.tv.activities.settings.SettingsActivity
@@ -156,6 +164,37 @@ fun MainScreen(
                     DrawerItem.PGC -> PgcContent(navFocusRequester = pgcFocusRequester)
                     DrawerItem.Search -> SearchInputScreen(defaultFocusRequester = searchFocusRequester)
                     else -> {}
+                }
+            }
+
+            // Touch-friendly user avatar overlay in content area
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = 80.dp, top = 12.dp)
+                    .size(48.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {
+                            if (userViewModel.isLogin) showUserPanel = true
+                            else context.startActivity(Intent(context, LoginActivity::class.java))
+                        }
+                    )
+            ) {
+                if (userViewModel.isLogin) {
+                    AsyncImage(
+                        modifier = Modifier.fillMaxSize(),
+                        model = userViewModel.face,
+                        contentDescription = null,
+                        contentScale = ContentScale.FillBounds
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.AccountCircle,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
             }
 

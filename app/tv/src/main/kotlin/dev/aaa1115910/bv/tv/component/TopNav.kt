@@ -2,7 +2,10 @@ package dev.aaa1115910.bv.tv.component
 
 import android.content.Context
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -109,20 +112,32 @@ private fun TabRowScope.NavItemTab(
 ) {
     val context = LocalContext.current
 
-    Tab(
-        modifier = modifier,
-        selected = selected,
-        onFocus = onFocus,
-        onClick = onClick
+    Box(
+        modifier = modifier
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {
+                    onFocus()
+                    onClick()
+                }
+            )
     ) {
-        Text(
-            modifier = Modifier
-                .height(32.dp)
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-            text = topNavItem.getDisplayName(context),
-            color = LocalContentColor.current,
-            style = MaterialTheme.typography.labelLarge
-        )
+        Tab(
+            modifier = Modifier,
+            selected = selected,
+            onFocus = onFocus,
+            onClick = onClick
+        ) {
+            Text(
+                modifier = Modifier
+                    .height(32.dp)
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                text = topNavItem.getDisplayName(context),
+                color = LocalContentColor.current,
+                style = MaterialTheme.typography.labelLarge
+            )
+        }
     }
 }
 

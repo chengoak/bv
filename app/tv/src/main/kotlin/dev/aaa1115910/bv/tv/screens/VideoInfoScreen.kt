@@ -10,6 +10,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
@@ -798,44 +799,40 @@ fun VideoInfoData(
         modifier = modifier
             .padding(horizontal = 50.dp, vertical = 16.dp),
     ) {
-        Surface(
+        Box(
             modifier = Modifier
                 .focusRequester(defaultFocusRequester)
                 .weight(3f)
                 .aspectRatio(1.6f)
                 .onGloballyPositioned { coordinates ->
                     heightIs = with(localDensity) { coordinates.size.height.toDp() }
-                },
-            onClick = onClickCover,
-            shape = ClickableSurfaceDefaults.shape(
-                shape = MaterialTheme.shapes.large,
-            ),
-            glow = ClickableSurfaceDefaults.glow(
-                focusedGlow = Glow(
-                    elevationColor = MaterialTheme.colorScheme.inverseSurface,
-                    elevation = 16.dp
+                }
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onClickCover
                 )
-            ),
-            border = if (Build.VERSION.SDK_INT < 28) {
-                ClickableSurfaceDefaults.border(
-                    focusedBorder = Border(
-                        border = BorderStroke(
+                .focusedBorder()
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                shape = MaterialTheme.shapes.large,
+                border = if (Build.VERSION.SDK_INT < 28) {
+                    Border(
+                        BorderStroke(
                             width = 3.dp,
                             color = MaterialTheme.colorScheme.border
-                        ),
-                        shape = MaterialTheme.shapes.large
+                        )
                     )
+                } else Border(BorderStroke(0.dp, Color.Transparent))
+            ) {
+                AsyncImage(
+                    modifier = Modifier.fillMaxSize(),
+                    model = if (videoDetail.ugcSeason != null) videoDetail.ugcSeason!!.cover else videoDetail.cover,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop
                 )
-            } else {
-                ClickableSurfaceDefaults.border()
             }
-        ) {
-            AsyncImage(
-                modifier = Modifier.fillMaxSize(),
-                model = if (videoDetail.ugcSeason != null) videoDetail.ugcSeason!!.cover else videoDetail.cover,
-                contentDescription = null,
-                contentScale = ContentScale.Crop
-            )
         }
         Spacer(modifier = Modifier.width(24.dp))
         Column(
@@ -1105,7 +1102,12 @@ private fun VideoPartButton(
     onClick: () -> Unit
 ) {
     Surface(
-        modifier = modifier,
+        modifier = modifier
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            ),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
@@ -1148,7 +1150,13 @@ private fun VideoPartRowButton(
     onClick: () -> Unit
 ) {
     Surface(
-        modifier = modifier.height(64.dp),
+        modifier = modifier
+            .height(64.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            ),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
