@@ -1,7 +1,9 @@
 package dev.aaa1115910.bv.tv.screens.main
 
-import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
@@ -44,6 +46,7 @@ import androidx.tv.material3.Text
 import androidx.tv.material3.rememberDrawerState
 import coil.compose.AsyncImage
 import dev.aaa1115910.bv.ui.theme.BVTheme
+import dev.aaa1115910.bv.util.focusedBorder
 import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.isDpadRight
 import dev.aaa1115910.bv.util.isKeyDown
@@ -89,51 +92,44 @@ fun NavigationDrawerScope.DrawerContent(
             },
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-
-        NavigationDrawerItem(
-            modifier = Modifier,
-            onClick = {
-                if (isLogin) {
-                    onShowUserPanel()
-                } else {
-                    onLogin()
-                }
-            },
-            selected = selectedItem == DrawerItem.User,
-            leadingContent = {
-                if (isLogin) {
-                    Surface(
+        // Touch-friendly user avatar button (replaces NavigationDrawerItem for user)
+        Box(
+            modifier = Modifier
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {
+                        if (isLogin) onShowUserPanel()
+                        else onLogin()
+                    }
+                )
+                .focusedBorder()
+                .padding(horizontal = 4.dp, vertical = 8.dp)
+        ) {
+            if (isLogin) {
+                Surface(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape),
+                    colors = SurfaceDefaults.colors(
+                        containerColor = Color.Gray
+                    )
+                ) {
+                    AsyncImage(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape),
-                        colors = SurfaceDefaults.colors(
-                            containerColor = Color.Gray
-                        )
-                    ) {
-                        AsyncImage(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape),
-                            model = avatar,
-                            contentDescription = null,
-                            contentScale = ContentScale.FillBounds
-                        )
-                    }
-                } else {
-                    Icon(
-                        imageVector = DrawerItem.User.displayIcon,
-                        contentDescription = null
+                        model = avatar,
+                        contentDescription = null,
+                        contentScale = ContentScale.FillBounds
                     )
                 }
+            } else {
+                Icon(
+                    imageVector = DrawerItem.User.displayIcon,
+                    contentDescription = null
+                )
             }
-        ) {
-            Text(
-                modifier = Modifier
-                    .basicMarquee(),
-                text = if (isLogin) username
-                else DrawerItem.User.displayName,
-                maxLines = 1
-            )
         }
         LazyColumn(
             modifier = Modifier.focusRestorer(centerFocusRequester),

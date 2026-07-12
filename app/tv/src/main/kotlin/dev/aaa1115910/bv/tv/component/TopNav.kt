@@ -28,7 +28,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Tab
 import androidx.tv.material3.TabRow
@@ -134,7 +133,7 @@ private fun TabRowScope.NavItemTab(
                     .height(32.dp)
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 text = topNavItem.getDisplayName(context),
-                color = LocalContentColor.current,
+                color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 style = MaterialTheme.typography.labelLarge
             )
         }
