@@ -2,10 +2,7 @@ package dev.aaa1115910.bv.tv.component
 
 import android.content.Context
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,6 +25,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Tab
 import androidx.tv.material3.TabRow
@@ -111,32 +109,20 @@ private fun TabRowScope.NavItemTab(
 ) {
     val context = LocalContext.current
 
-    Box(
-        modifier = modifier
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = {
-                    onFocus()
-                    onClick()
-                }
-            )
+    Tab(
+        modifier = modifier,
+        selected = selected,
+        onFocus = onFocus,
+        onClick = onClick
     ) {
-        Tab(
-            modifier = Modifier,
-            selected = selected,
-            onFocus = onFocus,
-            onClick = onClick
-        ) {
-            Text(
-                modifier = Modifier
-                    .height(32.dp)
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                text = topNavItem.getDisplayName(context),
-                color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                style = MaterialTheme.typography.labelLarge
-            )
-        }
+        Text(
+            modifier = Modifier
+                .height(32.dp)
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            text = topNavItem.getDisplayName(context),
+            color = LocalContentColor.current,
+            style = MaterialTheme.typography.labelLarge
+        )
     }
 }
 
