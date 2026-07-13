@@ -62,97 +62,82 @@ fun NavigationDrawerScope.DrawerContent(
     onLogin: () -> Unit = {}
 ) {
     var selectedItem by remember { mutableStateOf(DrawerItem.Home) }
-    val centerFocusRequester = remember { FocusRequester() }
-    var tabMoved by remember { mutableStateOf(true) }
 
     LaunchedEffect(selectedItem) {
-        tabMoved = false
-        delay(200)
         onDrawerItemChanged(selectedItem)
-        // 别急着向右移动焦点，动画还没结束
-        delay(200)
-        tabMoved = true
     }
 
-    Column(
+    LazyColumn(
         modifier = modifier
             .fillMaxHeight()
             .padding(12.dp)
             .onPreviewKeyEvent { keyEvent ->
-                if (keyEvent.isDpadRight()) {
-                    if (keyEvent.isKeyDown()) {
-                        if (tabMoved) onFocusToContent()
-                        return@onPreviewKeyEvent true
-                    }
+                if (keyEvent.isDpadRight() && keyEvent.isKeyDown()) {
+                    onFocusToContent()
+                    true
+                } else {
+                    false
                 }
-                false
             },
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-
-        NavigationDrawerItem(
-            modifier = Modifier,
-            onClick = {
-                if (isLogin) {
-                    onShowUserPanel()
-                } else {
-                    onLogin()
-                }
-            },
-            selected = selectedItem == DrawerItem.User,
-            leadingContent = {
-                if (isLogin) {
-                    Surface(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape),
-                        colors = SurfaceDefaults.colors(
-                            containerColor = Color.Gray
-                        )
-                    ) {
-                        AsyncImage(
+        item {
+            NavigationDrawerItem(
+                modifier = Modifier.onFocusChanged { if (it.hasFocus) selectedItem = DrawerItem.User },
+                onClick = {
+                    if (isLogin) {
+                        onShowUserPanel()
+                    } else {
+                        onLogin()
+                    }
+                },
+                selected = selectedItem == DrawerItem.User,
+                leadingContent = {
+                    if (isLogin) {
+                        Surface(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape),
-                            model = avatar,
-                            contentDescription = null,
-                            contentScale = ContentScale.FillBounds
+                            colors = SurfaceDefaults.colors(
+                                containerColor = Color.Gray
+                            )
+                        ) {
+                            AsyncImage(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape),
+                                model = avatar,
+                                contentDescription = null,
+                                contentScale = ContentScale.FillBounds
+                            )
+                        }
+                    } else {
+                        Icon(
+                            imageVector = DrawerItem.User.displayIcon,
+                            contentDescription = null
                         )
                     }
-                } else {
-                    Icon(
-                        imageVector = DrawerItem.User.displayIcon,
-                        contentDescription = null
-                    )
                 }
+            ) {
+                Text(
+                    modifier = Modifier.basicMarquee(),
+                    text = if (isLogin) username else DrawerItem.User.displayName,
+                    maxLines = 1
+                )
             }
-        ) {
-            Text(
-                modifier = Modifier
-                    .basicMarquee(),
-                text = if (isLogin) username
-                else DrawerItem.User.displayName,
-                maxLines = 1
-            )
         }
-        LazyColumn(
-            modifier = Modifier.focusRestorer(centerFocusRequester),
-            verticalArrangement = Arrangement.Center
-        ) {
-            listOf(
-                DrawerItem.Search,
-                DrawerItem.Home,
-                DrawerItem.UGC,
-                DrawerItem.PGC,
-            ).forEach { item ->
-                item {
+
+        item {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                listOf(
+                    DrawerItem.Search,
+                    DrawerItem.Home,
+                ).forEach { item ->
                     NavigationDrawerItem(
                         modifier = Modifier
-                            .onFocusChanged { if (it.hasFocus) selectedItem = item }
-                            .ifElse(
-                                item == DrawerItem.Home,
-                                Modifier.focusRequester(centerFocusRequester)
-                            ),
+                            .onFocusChanged { if (it.hasFocus) selectedItem = item },
                         onClick = { selectedItem = item },
                         selected = selectedItem == item,
                         leadingContent = {
@@ -167,18 +152,21 @@ fun NavigationDrawerScope.DrawerContent(
                 }
             }
         }
-        NavigationDrawerItem(
-            modifier = Modifier,
-            onClick = onOpenSettings,
-            selected = false,
-            leadingContent = {
-                Icon(
-                    imageVector = DrawerItem.Settings.displayIcon,
-                    contentDescription = null
-                )
+
+        item {
+            NavigationDrawerItem(
+                modifier = Modifier.onFocusChanged { if (it.hasFocus) selectedItem = DrawerItem.Settings },
+                onClick = onOpenSettings,
+                selected = selectedItem == DrawerItem.Settings,
+                leadingContent = {
+                    Icon(
+                        imageVector = DrawerItem.Settings.displayIcon,
+                        contentDescription = null
+                    )
+                }
+            ) {
+                Text(text = DrawerItem.Settings.displayName)
             }
-        ) {
-            Text(text = DrawerItem.Settings.displayName)
         }
     }
 }
