@@ -506,18 +506,21 @@ fun VideoInfoScreen(
             Box(
                 Modifier.padding(innerPadding)
             ) {
-                Image(
-                    modifier = Modifier.fillMaxSize(),
-                    painter = rememberAsyncImagePainter(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(if (videoDetailViewModel.videoDetail?.ugcSeason != null) videoDetailViewModel.videoDetail!!.ugcSeason!!.cover else videoDetailViewModel.videoDetail!!.cover)
-                            .transformations(BlurTransformation(LocalContext.current, 20f, 5f))
-                            .build()
-                    ),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    alpha = 0.6f
-                )
+                val coverUrl = videoDetailViewModel.videoDetail!!.cover
+                androidx.compose.runtime.key(coverUrl) {
+                    Image(
+                        modifier = Modifier.fillMaxSize(),
+                        painter = rememberAsyncImagePainter(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(coverUrl)
+                                .transformations(BlurTransformation(LocalContext.current, 20f, 5f))
+                                .build()
+                        ),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        alpha = 0.6f
+                    )
+                }
                 LazyColumn(
                     contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -830,12 +833,15 @@ fun VideoInfoData(
                 ClickableSurfaceDefaults.border()
             }
         ) {
-            AsyncImage(
-                modifier = Modifier.fillMaxSize(),
-                model = if (videoDetail.ugcSeason != null) videoDetail.ugcSeason!!.cover else videoDetail.cover,
-                contentDescription = null,
-                contentScale = ContentScale.Crop
-            )
+            val coverUrl = videoDetail.cover
+            androidx.compose.runtime.key(coverUrl) {
+                AsyncImage(
+                    modifier = Modifier.fillMaxSize(),
+                    model = coverUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop
+                )
+            }
         }
         Spacer(modifier = Modifier.width(24.dp))
         Column(

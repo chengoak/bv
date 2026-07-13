@@ -35,6 +35,8 @@ class VideoDetailViewModel(
     suspend fun loadDetail(aid: Long, fromPgcSeason: Boolean = false) {
         logger.fInfo { "Load detail: [avid=$aid, preferApiType=${Prefs.apiType.name}]" }
         state = VideoInfoState.Loading
+        videoDetail = null
+        relatedVideos.clear()
         runCatching {
             val videoDetailData = videoDetailRepository.getVideoDetail(
                 aid = aid,
