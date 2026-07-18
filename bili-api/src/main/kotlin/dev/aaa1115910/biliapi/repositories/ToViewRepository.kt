@@ -39,4 +39,15 @@ class ToViewRepository(
             }
         }
     }
+
+    suspend fun addToView(
+        avid: Long,
+        preferApiType: ApiType = ApiType.Web
+    ) {
+        BiliHttpApi.addVideoToWatchLater(
+            avid = avid,
+            csrf = authRepository.biliJct,
+            sessData = authRepository.sessionData!!
+        )
+    }
 }

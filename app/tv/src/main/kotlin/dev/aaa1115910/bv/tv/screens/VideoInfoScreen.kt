@@ -113,6 +113,7 @@ import dev.aaa1115910.biliapi.entity.video.VideoPage
 import dev.aaa1115910.biliapi.entity.video.season.Episode
 import dev.aaa1115910.biliapi.http.BiliPlusHttpApi
 import dev.aaa1115910.biliapi.repositories.FavoriteRepository
+import dev.aaa1115910.biliapi.repositories.ToViewRepository
 import dev.aaa1115910.biliapi.repositories.UserRepository
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
@@ -128,6 +129,7 @@ import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.component.UpIcon
 import dev.aaa1115910.bv.tv.component.buttons.FavoriteButton
+import dev.aaa1115910.bv.tv.component.buttons.WatchLaterButton
 import dev.aaa1115910.bv.tv.component.videocard.VideosRow
 import dev.aaa1115910.bv.tv.util.launchPlayerActivity
 import dev.aaa1115910.bv.ui.theme.BVTheme
@@ -162,6 +164,7 @@ fun VideoInfoScreen(
     videoDetailViewModel: VideoDetailViewModel = koinViewModel(),
     userRepository: UserRepository = getKoin().get(),
     favoriteRepository: FavoriteRepository = getKoin().get(),
+    toViewRepository: ToViewRepository = getKoin().get(),
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -303,6 +306,30 @@ fun VideoInfoScreen(
         }.onFailure {
             logger.fInfo { "Add video to default favorite folder failed: ${it.stackTraceToString()}" }
             it.message ?: "unknown error".toast(context)
+        }
+    }
+
+    val addVideoToWatchLater: () -> Unit = {
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                require(videoDetailViewModel.videoDetail?.aid != null) { "Video info is null" }
+                val aid = videoDetailViewModel.videoDetail!!.aid
+                logger.info { "Add video av$aid to watch later" }
+                toViewRepository.addToView(
+                    avid = aid,
+                    preferApiType = Prefs.apiType
+                )
+            }.onFailure {
+                logger.fInfo { "Add video to watch later failed: ${it.stackTraceToString()}" }
+                withContext(Dispatchers.Main) {
+                    (it.message ?: context.getString(R.string.watch_later_add_failed)).toast(context)
+                }
+            }.onSuccess {
+                logger.fInfo { "Add video to watch later success" }
+                withContext(Dispatchers.Main) {
+                    R.string.watch_later_add_success.toast(context)
+                }
+            }
         }
     }
 
@@ -632,6 +659,9 @@ fun VideoInfoScreen(
                                 updateVideoFavoriteData(it)
                                 favorited = it.isNotEmpty()
                                 videoInFavoriteFolderIds.swapList(it)
+                            },
+                            onAddToWatchLater = {
+                                addVideoToWatchLater()
                             }
                         )
                     }
@@ -792,7 +822,8 @@ fun VideoInfoData(
     onDelFollow: () -> Unit,
     onClickTip: (Tag) -> Unit,
     onAddToDefaultFavoriteFolder: () -> Unit,
-    onUpdateFavoriteFolders: (List<Long>) -> Unit
+    onUpdateFavoriteFolders: (List<Long>) -> Unit,
+    onAddToWatchLater: () -> Unit = {}
 ) {
     val localDensity = LocalDensity.current
     var heightIs by remember { mutableStateOf(0.dp) }
@@ -897,13 +928,20 @@ fun VideoInfoData(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                FavoriteButton(
-                    isFavorite = isFavorite,
-                    userFavoriteFolders = userFavoriteFolders,
-                    favoriteFolderIds = favoriteFolderIds,
-                    onAddToDefaultFavoriteFolder = onAddToDefaultFavoriteFolder,
-                    onUpdateFavoriteFolders = onUpdateFavoriteFolders
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FavoriteButton(
+                        isFavorite = isFavorite,
+                        userFavoriteFolders = userFavoriteFolders,
+                        favoriteFolderIds = favoriteFolderIds,
+                        onAddToDefaultFavoriteFolder = onAddToDefaultFavoriteFolder,
+                        onUpdateFavoriteFolders = onUpdateFavoriteFolders
+                    )
+                    WatchLaterButton(
+                        onAddToWatchLater = onAddToWatchLater
+                    )
+                }
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)

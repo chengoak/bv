@@ -758,6 +758,29 @@ object BiliHttpApi {
     }
 
     /**
+     * 将视频[avid]添加到稍后再看
+     */
+    suspend fun addVideoToWatchLater(
+        avid: Long,
+        csrf: String? = null,
+        sessData: String? = null
+    ) {
+        checkToken(null, sessData)
+        val response = client.post("/x/v2/history/toview/add") {
+            setBody(
+                FormDataContent(
+                    Parameters.build {
+                        append("aid", "$avid")
+                        csrf?.let { append("csrf", it) }
+                    }
+                )
+            )
+            sessData?.let { header("Cookie", "SESSDATA=$it;") }
+        }.body<BiliResponseWithoutData>()
+        check(response.code == 0) { response.message }
+    }
+
+    /**
      * 为视频[avid]添加到[addMediaIds]或从[delMediaIds]移除
      */
     suspend fun setVideoToFavorite(

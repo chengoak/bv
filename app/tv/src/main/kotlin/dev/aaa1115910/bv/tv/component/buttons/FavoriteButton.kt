@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Done
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.WatchLater
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -79,6 +80,28 @@ fun FavoriteButton(
         favoriteFolderIds = favoriteFolderIds,
         onUpdateFavoriteFolders = onUpdateFavoriteFolders
     )
+}
+
+@Composable
+fun WatchLaterButton(
+    modifier: Modifier = Modifier,
+    onAddToWatchLater: () -> Unit
+) {
+    Button(
+        modifier = modifier,
+        onClick = onAddToWatchLater
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.WatchLater,
+                contentDescription = null
+            )
+            Text(text = stringResource(R.string.watch_later_button_text))
+        }
+    }
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class)
