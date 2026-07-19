@@ -7,6 +7,10 @@
 .externalNativeBuild
 .cxx
 /signing.properties
+/key/
+*.keystore
+*.jks
+*.p12
 /.idea/jarRepositories.xml
 /.idea/migrations.xml
 /.idea/codeStyles/
