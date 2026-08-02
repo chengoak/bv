@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
@@ -21,6 +22,7 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -60,6 +62,14 @@ fun DynamicScreen(
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger { }
     val windowSize = calculateWindowSizeClass(context as Activity).widthSizeClass
+
+    LaunchedEffect(dynamicViewModel.isLogin) {
+        if (dynamicViewModel.isLogin && dynamicViewModel.dynamicAllList.isEmpty()) {
+            scope.launch(Dispatchers.IO) {
+                dynamicViewModel.loadMoreAll()
+            }
+        }
+    }
 
     val lane by remember { derivedStateOf { dynamicGridState.getLane() } }
 
@@ -121,29 +131,38 @@ fun DynamicScreen(
         Box(
             modifier = Modifier.padding(top = innerPadding.calculateTopPadding())
         ) {
-            LazyVerticalStaggeredGrid(
-                modifier = modifier
-                    .fillMaxSize()
-                    .ifElse(
-                        { windowSize != WindowWidthSizeClass.Compact },
-                        Modifier.clip(MaterialTheme.shapes.large)
-                    )
-                    .background(MaterialTheme.colorScheme.surface),
-                columns = StaggeredGridCells.Adaptive(300.dp),
-                state = dynamicGridState,
-                verticalItemSpacing = 8.dp,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(if (lane == 1) 0.dp else 8.dp)
-            ) {
-                items(items = dynamicViewModel.dynamicAllList) { dynamicItem ->
-                    DynamicItem(
-                        modifier = Modifier
-                            .ifElse(lane != 1, Modifier.clip(MaterialTheme.shapes.medium)),
-                        dynamicItem = dynamicItem,
-                        previewerState = previewerState,
-                        onShowPreviewer = onShowPreviewer,
-                        onClick = onClickDynamicItem
-                    )
+            if (!dynamicViewModel.isLogin) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = "请先登录")
+                }
+            } else {
+                LazyVerticalStaggeredGrid(
+                    modifier = modifier
+                        .fillMaxSize()
+                        .ifElse(
+                            { windowSize != WindowWidthSizeClass.Compact },
+                            Modifier.clip(MaterialTheme.shapes.large)
+                        )
+                        .background(MaterialTheme.colorScheme.surface),
+                    columns = StaggeredGridCells.Adaptive(300.dp),
+                    state = dynamicGridState,
+                    verticalItemSpacing = 8.dp,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(if (lane == 1) 0.dp else 8.dp)
+                ) {
+                    items(items = dynamicViewModel.dynamicAllList) { dynamicItem ->
+                        DynamicItem(
+                            modifier = Modifier
+                                .ifElse(lane != 1, Modifier.clip(MaterialTheme.shapes.medium)),
+                            dynamicItem = dynamicItem,
+                            previewerState = previewerState,
+                            onShowPreviewer = onShowPreviewer,
+                            onClick = onClickDynamicItem
+                        )
+                    }
                 }
             }
         }
