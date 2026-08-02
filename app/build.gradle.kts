@@ -7,7 +7,6 @@ import java.util.Properties
 
 plugins {
     alias(gradleLibs.plugins.android.application)
-    alias(gradleLibs.plugins.compose.compiler)
     alias(gradleLibs.plugins.firebase.crashlytics)
     alias(gradleLibs.plugins.google.ksp)
     alias(gradleLibs.plugins.google.services) apply false
@@ -111,7 +110,7 @@ android {
     }
 
     buildFeatures {
-        compose = true
+        //compose = true
         //buildConfig = true
     }
 
@@ -155,22 +154,19 @@ android {
     }
 }
 
-composeCompiler {
-    reportsDestination = layout.buildDirectory.dir("compose_build_reports")
-    stabilityConfigurationFiles.addAll(
-        layout.projectDirectory.file("compose_compiler_config.conf")
-    )
+tasks.withType<Test> {
+    useJUnitPlatform()
+}
+
+dependencies {
+    implementation(project(":app:mobile"))
+    implementation(project(":app:tv"))
 }
 
 java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(AppConfiguration.jdk))
     }
-}
-
-dependencies {
-    implementation(project(":app:mobile"))
-    implementation(project(":app:tv"))
 }
 
 tasks.withType<Test> {
