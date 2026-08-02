@@ -48,6 +48,7 @@ import dev.aaa1115910.biliapi.http.entity.user.favorite.FavoriteFolderInfo
 import dev.aaa1115910.biliapi.http.entity.user.favorite.FavoriteFolderInfoListData
 import dev.aaa1115910.biliapi.http.entity.user.favorite.FavoriteItemIdListResponse
 import dev.aaa1115910.biliapi.http.entity.user.favorite.UserFavoriteFoldersData
+import dev.aaa1115910.biliapi.http.util.encWbi
 import dev.aaa1115910.biliapi.http.entity.user.garb.Equip
 import dev.aaa1115910.biliapi.http.entity.user.garb.EquipPart
 import dev.aaa1115910.biliapi.http.entity.video.AddCoin
@@ -352,6 +353,7 @@ object BiliHttpApi {
         parameter("page", page)
         offset?.let { parameter("offset", offset) }
         header("Cookie", "SESSDATA=$sessData;")
+        encWbi()
     }.body()
 
     /**
@@ -369,6 +371,7 @@ object BiliHttpApi {
         parameter("id", id)
         features?.let { parameter("features", it) }
         header("Cookie", "SESSDATA=$sessData;")
+        encWbi()
     }.body()
 
     /**
