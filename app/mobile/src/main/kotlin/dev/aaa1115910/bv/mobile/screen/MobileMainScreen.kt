@@ -141,12 +141,12 @@ fun MobileMainScreen(
         }
 
     val verticalNavOrder = listOf(
-        MobileMainScreenNav.Search, MobileMainScreenNav.Home,
-        MobileMainScreenNav.Zone, MobileMainScreenNav.Dynamic
+        MobileMainScreenNav.Home, MobileMainScreenNav.Dynamic,
+        MobileMainScreenNav.Search
     ).map { it.name }
     val horizontalNavOrder = listOf(
-        MobileMainScreenNav.Home, MobileMainScreenNav.Zone,
-        MobileMainScreenNav.Search, MobileMainScreenNav.Dynamic,
+        MobileMainScreenNav.Home, MobileMainScreenNav.Dynamic,
+        MobileMainScreenNav.Search,
     ).map { it.name }
 
     val compareNavIndex: (String?, String?) -> Boolean = { a, b ->
@@ -266,9 +266,6 @@ fun MobileMainScreen(
                 composable(MobileMainScreenNav.Search.name) {
                     SearchScreen()
                 }
-                composable(MobileMainScreenNav.Zone.name) {
-                    DevelopingTipContent()
-                }
             }
         }
     }
@@ -344,9 +341,8 @@ private fun NavigationSuit(
             ) {
                 listOf(
                     MobileMainScreenNav.Home,
-                    MobileMainScreenNav.Zone,
-                    MobileMainScreenNav.Search,
                     MobileMainScreenNav.Dynamic,
+                    MobileMainScreenNav.Search,
                 ).forEach { navItem ->
                     item(
                         icon = { Icon(navItem.icon, contentDescription = navItem.displayName) },
@@ -388,10 +384,9 @@ private fun NavigationSuit(
                 )
                 Spacer(Modifier.weight(1f))
                 listOf(
-                    MobileMainScreenNav.Search,
                     MobileMainScreenNav.Home,
-                    MobileMainScreenNav.Zone,
                     MobileMainScreenNav.Dynamic,
+                    MobileMainScreenNav.Search,
                 ).forEach { navItem ->
                     NavigationRailItem(
                         icon = { Icon(navItem.icon, contentDescription = navItem.displayName) },
@@ -479,12 +474,6 @@ data class MobileMainScreenState(
                     navigateToRoute()
                 } else {
                     scope.launch { dynamicGridState.animateScrollToItem(0) }
-                }
-            }
-
-            MobileMainScreenNav.Zone -> {
-                if (notCurrentNavItem) {
-                    navigateToRoute()
                 }
             }
         }
@@ -598,9 +587,8 @@ fun rememberMobileMainScreenState(
 
 enum class MobileMainScreenNav(val displayName: String, val icon: ImageVector) {
     Home("首页", Icons.Rounded.Home),
-    Zone("分区", Icons.AutoMirrored.Rounded.Segment),
-    Search("搜索", Icons.Rounded.Search),
     Dynamic("动态", Icons.Rounded.FiberNew),
+    Search("搜索", Icons.Rounded.Search),
     Setting("设置", Icons.Rounded.Settings), ;
 
     companion object {
