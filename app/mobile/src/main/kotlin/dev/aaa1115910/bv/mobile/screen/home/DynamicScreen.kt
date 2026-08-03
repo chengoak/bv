@@ -145,6 +145,26 @@ fun DynamicScreen(
                 val hasFilter =
                     dynamicViewModel.dateStart != null || dynamicViewModel.dateEnd != null
                 if (dynamicViewModel.filteredDynamicVideoList.isEmpty() && hasFilter) {
+                    val loadedRange = remember(dynamicViewModel.dynamicVideoList) {
+                        val pubs = dynamicViewModel.dynamicVideoList
+                            .map { it.pubTs }
+                            .filter { it > 0L }
+                        if (pubs.isEmpty()) {
+                            "已加载 ${dynamicViewModel.dynamicVideoList.size} 条动态"
+                        } else {
+                            val min = pubs.min()
+                            val max = pubs.max()
+                            val dateFmt = java.text.SimpleDateFormat(
+                                "MM-dd HH:mm",
+                                java.util.Locale.getDefault()
+                            ).apply {
+                                timeZone = java.util.TimeZone.getTimeZone("Asia/Shanghai")
+                            }
+                            "已加载 ${dynamicViewModel.dynamicVideoList.size} 条动态（" +
+                                "${dateFmt.format(java.util.Date(min * 1000L))} ~ " +
+                                "${dateFmt.format(java.util.Date(max * 1000L))}）"
+                        }
+                    }
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -160,7 +180,12 @@ fun DynamicScreen(
                                 style = MaterialTheme.typography.bodyLarge
                             )
                             Text(
-                                text = "已加载 ${dynamicViewModel.dynamicVideoList.size} 条动态，可放宽日期范围或清除筛选",
+                                text = loadedRange,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "请放宽日期范围，或下拉加载更多动态",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -261,12 +286,14 @@ fun DynamicScreen(
                                 val newStart = startOfDaySeconds(millis)
                                 val end = dynamicViewModel.dateEnd
                                 dynamicViewModel.setDateRange(newStart, end)
+                                dynamicViewModel.autoLoadUntilFilterMatches()
                             }
 
                             DatePickerTarget.End -> {
                                 val newEnd = endOfDaySeconds(millis)
                                 val start = dynamicViewModel.dateStart
                                 dynamicViewModel.setDateRange(start, newEnd)
+                                dynamicViewModel.autoLoadUntilFilterMatches()
                             }
                         }
                     }

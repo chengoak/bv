@@ -64,6 +64,26 @@ class DynamicViewModel(
         dateEnd = end
     }
 
+    /**
+     * 筛选无结果时，自动加载下一页直到找到匹配或翻到尽头。
+     * 防止用户因为「只看了 6 页（最近 1 天）就筛选，匹配数据在更后面」而看不到内容。
+     */
+    fun autoLoadUntilFilterMatches() {
+        if (dateStart == null && dateEnd == null) return
+        viewModelScope.launch(Dispatchers.IO) {
+            var guard = 0
+            while (
+                filteredDynamicVideoList.isEmpty() &&
+                videoHasMore &&
+                !loadingVideo &&
+                guard < 20
+            ) {
+                loadVideoData()
+                guard++
+            }
+        }
+    }
+
     private var currentVideoPage = 0
     var loadingVideo = false
     var videoHasMore = true
