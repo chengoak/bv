@@ -5,56 +5,71 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.Alignment
-import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
-import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
-import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.origeek.imageViewer.previewer.ImagePreviewerState
 import dev.aaa1115910.biliapi.entity.Picture
-import dev.aaa1115910.biliapi.entity.user.DynamicItem
-import dev.aaa1115910.biliapi.entity.user.DynamicType
-import dev.aaa1115910.bv.mobile.activities.DynamicDetailActivity
-import dev.aaa1115910.bv.mobile.activities.VideoPlayerActivity
-import dev.aaa1115910.bv.mobile.component.home.dynamic.DynamicItem
+import dev.aaa1115910.bv.entity.carddata.VideoCardData
+import dev.aaa1115910.bv.mobile.component.videocard.SmallVideoCard
+import dev.aaa1115910.bv.util.BilibiliIntent
 import dev.aaa1115910.bv.util.OnBottomReached
 import dev.aaa1115910.bv.util.fInfo
-import dev.aaa1115910.bv.util.getLane
 import dev.aaa1115910.bv.util.ifElse
-import dev.aaa1115910.bv.util.toast
 import dev.aaa1115910.bv.viewmodel.home.DynamicViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+
+private enum class DatePickerTarget { Start, End }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 fun DynamicScreen(
     modifier: Modifier = Modifier,
     dynamicViewModel: DynamicViewModel = koinViewModel(),
-    dynamicGridState: LazyStaggeredGridState,
+    dynamicGridState: androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState,
     previewerState: ImagePreviewerState,
     onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit
 ) {
@@ -63,64 +78,41 @@ fun DynamicScreen(
     val logger = KotlinLogging.logger { }
     val windowSize = calculateWindowSizeClass(context as Activity).widthSizeClass
 
+    val videoGridState = rememberLazyGridState()
+
     LaunchedEffect(dynamicViewModel.isLogin) {
-        if (dynamicViewModel.isLogin && dynamicViewModel.dynamicAllList.isEmpty()) {
+        if (dynamicViewModel.isLogin && dynamicViewModel.dynamicVideoList.isEmpty()) {
             scope.launch(Dispatchers.IO) {
-                dynamicViewModel.loadMoreAll()
+                dynamicViewModel.loadMoreVideo()
             }
         }
     }
 
-    val lane by remember { derivedStateOf { dynamicGridState.getLane() } }
-
-    val onClickDynamicItem: (DynamicItem) -> Unit = { dynamicItem ->
-        logger.fInfo { "click dynamic type: ${dynamicItem.type}" }
-        when (dynamicItem.type) {
-            DynamicType.Av -> {
-                println("=== ${dynamicItem.video} ===")
-                VideoPlayerActivity.actionStart(
-                    context = context,
-                    aid = dynamicItem.video!!.aid,
-                    fromSeason = dynamicItem.video!!.seasonId != null
-                            && dynamicItem.video!!.seasonId != 0,
-                )
-            }
-
-            DynamicType.Pgc -> {
-                VideoPlayerActivity.actionStart(
-                    context = context,
-                    //aid = dynamicItem.pgc!!.epid,
-                    aid = 0,
-                    fromSeason = true,
-                    epid = dynamicItem.pgc!!.epid,
-                    seasonId = dynamicItem.pgc!!.seasonId,
-                )
-            }
-
-            else -> {
-                if (dynamicItem.id != null) {
-                    DynamicDetailActivity.actionStart(context, dynamicItem.id!!)
-                } else {
-                    "原动态不存在".toast(context)
-                }
-            }
-        }
+    val onClickVideo: (dev.aaa1115910.biliapi.entity.user.DynamicVideo) -> Unit = { video ->
+        BilibiliIntent.openVideo(
+            context = context,
+            aid = video.aid,
+            bvid = video.bvid
+        )
     }
 
-    dynamicGridState.OnBottomReached(
-        loading = dynamicViewModel.loadingAll
+    videoGridState.OnBottomReached(
+        loading = dynamicViewModel.loadingVideo
     ) {
-        logger.fInfo { "on reached rcmd page bottom" }
+        logger.fInfo { "on reached video dynamic page bottom" }
         scope.launch(Dispatchers.IO) {
-            dynamicViewModel.loadMoreAll()
+            dynamicViewModel.loadMoreVideo()
         }
     }
+
+    var showDatePicker by remember { mutableStateOf<DatePickerTarget?>(null) }
+    var menuTargetAid by remember { mutableStateOf<Long?>(null) }
 
     Scaffold(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text(text = "Dynamic") },
+                title = { Text(text = "动态") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 )
@@ -128,9 +120,19 @@ fun DynamicScreen(
         },
         containerColor = MaterialTheme.colorScheme.surfaceContainer
     ) { innerPadding ->
-        Box(
-            modifier = Modifier.padding(top = innerPadding.calculateTopPadding())
+        androidx.compose.foundation.layout.Column(
+            modifier = Modifier
+                .padding(top = innerPadding.calculateTopPadding())
+                .fillMaxSize()
         ) {
+            DateFilterBar(
+                startTs = dynamicViewModel.dateStart,
+                endTs = dynamicViewModel.dateEnd,
+                onPickStart = { showDatePicker = DatePickerTarget.Start },
+                onPickEnd = { showDatePicker = DatePickerTarget.End },
+                onClear = { dynamicViewModel.setDateRange(null, null) }
+            )
+
             if (!dynamicViewModel.isLogin) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -139,65 +141,187 @@ fun DynamicScreen(
                     Text(text = "请先登录")
                 }
             } else {
-                LazyVerticalStaggeredGrid(
-                    modifier = modifier
+                LazyVerticalGrid(
+                    modifier = Modifier
                         .fillMaxSize()
                         .ifElse(
                             { windowSize != WindowWidthSizeClass.Compact },
                             Modifier.clip(MaterialTheme.shapes.large)
                         )
                         .background(MaterialTheme.colorScheme.surface),
-                    columns = StaggeredGridCells.Adaptive(300.dp),
-                    state = dynamicGridState,
-                    verticalItemSpacing = 8.dp,
+                    columns = GridCells.Fixed(2),
+                    state = videoGridState,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(if (lane == 1) 0.dp else 8.dp)
+                    contentPadding = PaddingValues(8.dp)
                 ) {
-                    items(items = dynamicViewModel.dynamicAllList) { dynamicItem ->
-                        DynamicItem(
-                            modifier = Modifier
-                                .ifElse(lane != 1, Modifier.clip(MaterialTheme.shapes.medium)),
-                            dynamicItem = dynamicItem,
-                            previewerState = previewerState,
-                            onShowPreviewer = onShowPreviewer,
-                            onClick = onClickDynamicItem
-                        )
+                    items(items = dynamicViewModel.filteredDynamicVideoList) { video ->
+                        Box {
+                            SmallVideoCard(
+                                modifier = Modifier
+                                    .ifElse(
+                                        windowSize != WindowWidthSizeClass.Compact,
+                                        Modifier.clip(MaterialTheme.shapes.medium)
+                                    ),
+                                data = VideoCardData(
+                                    avid = video.aid,
+                                    title = video.title,
+                                    cover = video.cover,
+                                    upName = video.author,
+                                    play = video.play,
+                                    danmaku = video.danmaku,
+                                    time = video.duration * 1000L,
+                                    epId = video.epid,
+                                    jumpToSeason = video.seasonId != null
+                                ),
+                                onClick = { onClickVideo(video) },
+                                onMore = { menuTargetAid = video.aid }
+                            )
+                            DropdownMenu(
+                                expanded = menuTargetAid == video.aid,
+                                onDismissRequest = { menuTargetAid = null }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("收藏") },
+                                    onClick = {
+                                        dynamicViewModel.addToFavorite(video.aid)
+                                        menuTargetAid = null
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("稍后再看") },
+                                    onClick = {
+                                        dynamicViewModel.addToWatchLater(video.aid)
+                                        menuTargetAid = null
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("在 哔哩哔哩 客户端打开") },
+                                    onClick = {
+                                        BilibiliIntent.openVideo(
+                                            context = context,
+                                            aid = video.aid,
+                                            bvid = video.bvid
+                                        )
+                                        menuTargetAid = null
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
     }
+
+    val pickerTarget = showDatePicker
+    if (pickerTarget != null) {
+        val initialMillis = when (pickerTarget) {
+            DatePickerTarget.Start -> (dynamicViewModel.dateStart ?: System.currentTimeMillis() / 1000) * 1000L
+            DatePickerTarget.End -> (dynamicViewModel.dateEnd ?: System.currentTimeMillis() / 1000) * 1000L
+        }
+        val pickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    val millis = pickerState.selectedDateMillis
+                    if (millis != null) {
+                        val pickedSeconds = millis / 1000L
+                        when (pickerTarget) {
+                            DatePickerTarget.Start -> {
+                                val newStart = startOfDaySeconds(pickedSeconds)
+                                val end = dynamicViewModel.dateEnd
+                                dynamicViewModel.setDateRange(newStart, end)
+                            }
+
+                            DatePickerTarget.End -> {
+                                val newEnd = endOfDaySeconds(pickedSeconds)
+                                val start = dynamicViewModel.dateStart
+                                dynamicViewModel.setDateRange(start, newEnd)
+                            }
+                        }
+                    }
+                    showDatePicker = null
+                }) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = null }) { Text("取消") }
+            }
+        ) {
+            DatePicker(state = pickerState)
+        }
+    }
 }
 
-private val exampleAuthorData = DynamicItem.DynamicAuthorModule(
-    author = "author",
-    avatar = "",
-    mid = 0,
-    pubTime = "54 分钟前 投稿了视频",
-    pubAction = ""
-)
+@Composable
+private fun DateFilterBar(
+    startTs: Long?,
+    endTs: Long?,
+    onPickStart: () -> Unit,
+    onPickEnd: () -> Unit,
+    onClear: () -> Unit
+) {
+    val dateFormatter = remember {
+        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply {
+            timeZone = TimeZone.getTimeZone("Asia/Shanghai")
+        }
+    }
+    val hasFilter = startTs != null || endTs != null
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        FilterChip(
+            selected = startTs != null,
+            onClick = onPickStart,
+            label = {
+                Text(
+                    text = startTs?.let { dateFormatter.format(Date(it * 1000L)) } ?: "开始日期"
+                )
+            },
+            leadingIcon = {
+                Icon(Icons.Default.DateRange, contentDescription = null)
+            }
+        )
+        Text(text = "至", style = MaterialTheme.typography.bodyMedium)
+        FilterChip(
+            selected = endTs != null,
+            onClick = onPickEnd,
+            label = {
+                Text(
+                    text = endTs?.let { dateFormatter.format(Date(it * 1000L)) } ?: "结束日期"
+                )
+            },
+            leadingIcon = {
+                Icon(Icons.Default.DateRange, contentDescription = null)
+            }
+        )
+        if (hasFilter) {
+            TextButton(onClick = onClear) { Text("清除") }
+        }
+    }
+}
 
-private val exampleFooterData = DynamicItem.DynamicFooterModule(
-    like = 2,
-    comment = 61,
-    share = 8,
-)
+private fun startOfDaySeconds(millis: Long): Long {
+    val cal = java.util.Calendar.getInstance(TimeZone.getTimeZone("Asia/Shanghai"))
+    cal.timeInMillis = millis
+    cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+    cal.set(java.util.Calendar.MINUTE, 0)
+    cal.set(java.util.Calendar.SECOND, 0)
+    cal.set(java.util.Calendar.MILLISECOND, 0)
+    return cal.timeInMillis / 1000L
+}
 
-private val exampleVideoData = DynamicItem.DynamicVideoModule(
-    aid = 0,
-    title = "title",
-    cover = "",
-    duration = "23:45",
-    play = "xx play",
-    danmaku = "xx dm",
-    seasonId = 0,
-    cid = 0,
-    text = "desc"
-)
-
-private val exampleDynamicItemData = DynamicItem(
-    type = DynamicType.Av,
-    author = exampleAuthorData,
-    video = exampleVideoData,
-    footer = exampleFooterData
-)
+private fun endOfDaySeconds(millis: Long): Long {
+    val cal = java.util.Calendar.getInstance(TimeZone.getTimeZone("Asia/Shanghai"))
+    cal.timeInMillis = millis
+    cal.set(java.util.Calendar.HOUR_OF_DAY, 23)
+    cal.set(java.util.Calendar.MINUTE, 59)
+    cal.set(java.util.Calendar.SECOND, 59)
+    cal.set(java.util.Calendar.MILLISECOND, 999)
+    return cal.timeInMillis / 1000L
+}

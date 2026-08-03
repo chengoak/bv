@@ -1,13 +1,17 @@
 package dev.aaa1115910.bv.viewmodel.home
 
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
 import dev.aaa1115910.biliapi.entity.user.DynamicVideo
 import dev.aaa1115910.biliapi.http.entity.AuthFailureException
+import dev.aaa1115910.biliapi.repositories.FavoriteRepository
+import dev.aaa1115910.biliapi.repositories.ToViewRepository
 import dev.aaa1115910.biliapi.repositories.UserRepository
 import dev.aaa1115910.bv.BVApp
 import dev.aaa1115910.bv.BuildConfig
@@ -19,6 +23,7 @@ import dev.aaa1115910.bv.util.fWarn
 import dev.aaa1115910.bv.util.toast
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.android.annotation.KoinViewModel
 import dev.aaa1115910.bv.repository.UserRepository as BvUserRepository
@@ -26,7 +31,9 @@ import dev.aaa1115910.bv.repository.UserRepository as BvUserRepository
 @KoinViewModel
 class DynamicViewModel(
     private val bvUserRepository: BvUserRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val favoriteRepository: FavoriteRepository,
+    private val toViewRepository: ToViewRepository,
 ) : ViewModel() {
     companion object {
         private val logger = KotlinLogging.logger {}
@@ -34,6 +41,28 @@ class DynamicViewModel(
 
     val dynamicVideoList = mutableStateListOf<DynamicVideo>()
     val dynamicAllList = mutableStateListOf<DynamicItem>()
+
+    // Date range filter (epoch seconds). null means no bound.
+    var dateStart by mutableStateOf<Long?>(null)
+    var dateEnd by mutableStateOf<Long?>(null)
+
+    val filteredDynamicVideoList by derivedStateOf {
+        if (dateStart == null && dateEnd == null) {
+            dynamicVideoList
+        } else {
+            val start = dateStart
+            val end = dateEnd
+            dynamicVideoList.filter { v ->
+                if (v.pubTs == 0L) return@filter true
+                (start == null || v.pubTs >= start) && (end == null || v.pubTs <= end)
+            }
+        }
+    }
+
+    fun setDateRange(start: Long?, end: Long?) {
+        dateStart = start
+        dateEnd = end
+    }
 
     private var currentVideoPage = 0
     var loadingVideo = false
@@ -157,5 +186,52 @@ class DynamicViewModel(
         loadingAll = false
         allHasMore = true
         allHistoryOffset = null
+    }
+
+    fun addToFavorite(aid: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val folders = favoriteRepository.getAllFavoriteFolderMetadataList(
+                    mid = Prefs.uid,
+                    preferApiType = Prefs.apiType
+                )
+                val defaultFolderId = folders.firstOrNull()?.id
+                if (defaultFolderId == null) {
+                    withContext(Dispatchers.Main) {
+                        "未找到默认收藏夹".toast(BVApp.context)
+                    }
+                    return@runCatching
+                }
+                favoriteRepository.addVideoToFavoriteFolder(
+                    aid = aid,
+                    addMediaIds = listOf(defaultFolderId),
+                    preferApiType = Prefs.apiType
+                )
+                withContext(Dispatchers.Main) {
+                    "已加入收藏".toast(BVApp.context)
+                }
+            }.onFailure {
+                logger.fWarn { "Add to favorite failed: ${it.stackTraceToString()}" }
+                withContext(Dispatchers.Main) {
+                    "收藏失败: ${it.localizedMessage ?: it.javaClass.simpleName}".toast(BVApp.context)
+                }
+            }
+        }
+    }
+
+    fun addToWatchLater(aid: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                toViewRepository.addToView(avid = aid, preferApiType = Prefs.apiType)
+                withContext(Dispatchers.Main) {
+                    "已加入稍后再看".toast(BVApp.context)
+                }
+            }.onFailure {
+                logger.fWarn { "Add to watch later failed: ${it.stackTraceToString()}" }
+                withContext(Dispatchers.Main) {
+                    "加入稍后再看失败: ${it.localizedMessage ?: it.javaClass.simpleName}".toast(BVApp.context)
+                }
+            }
+        }
     }
 }
