@@ -227,16 +227,15 @@ fun DynamicScreen(
                 TextButton(onClick = {
                     val millis = pickerState.selectedDateMillis
                     if (millis != null) {
-                        val pickedSeconds = millis / 1000L
                         when (pickerTarget) {
                             DatePickerTarget.Start -> {
-                                val newStart = startOfDaySeconds(pickedSeconds)
+                                val newStart = startOfDaySeconds(millis)
                                 val end = dynamicViewModel.dateEnd
                                 dynamicViewModel.setDateRange(newStart, end)
                             }
 
                             DatePickerTarget.End -> {
-                                val newEnd = endOfDaySeconds(pickedSeconds)
+                                val newEnd = endOfDaySeconds(millis)
                                 val start = dynamicViewModel.dateStart
                                 dynamicViewModel.setDateRange(start, newEnd)
                             }
