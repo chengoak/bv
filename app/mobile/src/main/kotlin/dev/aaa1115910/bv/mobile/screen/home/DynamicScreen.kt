@@ -4,6 +4,7 @@ import android.app.Activity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -141,6 +142,34 @@ fun DynamicScreen(
                     Text(text = "请先登录")
                 }
             } else {
+                val hasFilter =
+                    dynamicViewModel.dateStart != null || dynamicViewModel.dateEnd != null
+                if (dynamicViewModel.filteredDynamicVideoList.isEmpty() && hasFilter) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = 48.dp),
+                        contentAlignment = Alignment.TopCenter
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "当前筛选条件下暂无动态",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = "已加载 ${dynamicViewModel.dynamicVideoList.size} 条动态，可放宽日期范围或清除筛选",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            TextButton(onClick = { dynamicViewModel.setDateRange(null, null) }) {
+                                Text("清除筛选")
+                            }
+                        }
+                    }
+                }
                 LazyVerticalGrid(
                     modifier = Modifier
                         .fillMaxSize()
