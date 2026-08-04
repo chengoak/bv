@@ -23,6 +23,7 @@ import dev.aaa1115910.bv.util.fWarn
 import dev.aaa1115910.bv.util.toast
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.android.annotation.KoinViewModel
@@ -76,19 +77,31 @@ class DynamicViewModel(
     }
 
     /**
-     * 筛选无结果时，自动加载下一页直到找到匹配或翻到尽头。
+     * 选中某个具体日期后调用：自动循环加载更多页，直到：
+     *  - 找到当天匹配的视频（列表非空），或
+     *  - 已加载数据的最早发布时间 <= 选中日期（不可能再找到），或
+     *  - API 报告没有更多数据（hasMore = false），或
+     *  - 达到 50 次上限。
      * 防止用户因为「只看了 6 页（最近 1 天）就筛选，匹配数据在更后面」而看不到内容。
      */
     fun autoLoadUntilFilterMatches() {
         if (selectedDate == null) return
+        val target = selectedDate ?: return
         viewModelScope.launch(Dispatchers.IO) {
             var guard = 0
-            while (
-                filteredDynamicVideoList.isEmpty() &&
-                videoHasMore &&
-                !loadingVideo &&
-                guard < 20
-            ) {
+            while (guard < 50) {
+                if (filteredDynamicVideoList.isNotEmpty()) break
+                if (!videoHasMore) break
+                if (loadingVideo) {
+                    // 上一次 loadVideoData 还没结束，等一会
+                    delay(150)
+                    continue
+                }
+                // 已加载数据中最早一条 pubTs <= 选中日期就说明永远找不到了
+                val oldestPubTs = dynamicVideoList
+                    .filter { it.pubTs > 0L }
+                    .minOfOrNull { it.pubTs } ?: Long.MAX_VALUE
+                if (oldestPubTs != Long.MAX_VALUE && oldestPubTs < target) break
                 loadVideoData()
                 guard++
             }
@@ -106,8 +119,8 @@ class DynamicViewModel(
     }
 
     private var currentVideoPage = 0
-    var loadingVideo = false
-    var videoHasMore = true
+    var loadingVideo by mutableStateOf(false)
+    var videoHasMore by mutableStateOf(true)
     private var videoHistoryOffset: String? = null
     private var videoUpdateBaseline: String? = null
 
