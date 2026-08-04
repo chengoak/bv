@@ -42,26 +42,35 @@ class DynamicViewModel(
     val dynamicVideoList = mutableStateListOf<DynamicVideo>()
     val dynamicAllList = mutableStateListOf<DynamicItem>()
 
-    // Date range filter (epoch seconds). null means no bound.
-    var dateStart by mutableStateOf<Long?>(null)
-    var dateEnd by mutableStateOf<Long?>(null)
+    // Single date filter (epoch seconds, start of day). null = no filter.
+    var selectedDate by mutableStateOf<Long?>(null)
 
     val filteredDynamicVideoList by derivedStateOf {
-        if (dateStart == null && dateEnd == null) {
+        if (selectedDate == null) {
             dynamicVideoList
         } else {
-            val start = dateStart
-            val end = dateEnd
+            val day = selectedDate ?: return@derivedStateOf dynamicVideoList
+            // selectedDate 是「那天 0 点」的秒数，匹配 [day, day+86400)
+            val dayEnd = day + 86400L
             dynamicVideoList.filter { v ->
                 if (v.pubTs == 0L) return@filter true
-                (start == null || v.pubTs >= start) && (end == null || v.pubTs <= end)
+                v.pubTs in day until dayEnd
             }
         }
     }
 
-    fun setDateRange(start: Long?, end: Long?) {
-        dateStart = start
-        dateEnd = end
+    fun setDate(date: Long?) {
+        selectedDate = date
+    }
+
+    /**
+     * 在当前选中日期上移动 [days] 天，可为负。
+     * 没选日期时基于「今天」偏移。
+     */
+    fun shiftDate(days: Int) {
+        val tz = java.util.TimeZone.getTimeZone("Asia/Shanghai")
+        val base = selectedDate ?: startOfTodaySeconds(tz)
+        selectedDate = base + days * 86400L
     }
 
     /**
@@ -69,7 +78,7 @@ class DynamicViewModel(
      * 防止用户因为「只看了 6 页（最近 1 天）就筛选，匹配数据在更后面」而看不到内容。
      */
     fun autoLoadUntilFilterMatches() {
-        if (dateStart == null && dateEnd == null) return
+        if (selectedDate == null) return
         viewModelScope.launch(Dispatchers.IO) {
             var guard = 0
             while (
@@ -82,6 +91,16 @@ class DynamicViewModel(
                 guard++
             }
         }
+    }
+
+    private fun startOfTodaySeconds(tz: java.util.TimeZone): Long {
+        val cal = java.util.Calendar.getInstance(tz).apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        return cal.timeInMillis / 1000L
     }
 
     private var currentVideoPage = 0

@@ -15,6 +15,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -22,6 +24,8 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -64,8 +68,6 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-private enum class DatePickerTarget { Start, End }
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 fun DynamicScreen(
@@ -107,7 +109,7 @@ fun DynamicScreen(
         }
     }
 
-    var showDatePicker by remember { mutableStateOf<DatePickerTarget?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
     var menuTargetAid by remember { mutableStateOf<Long?>(null) }
 
     Scaffold(
@@ -128,11 +130,10 @@ fun DynamicScreen(
                 .fillMaxSize()
         ) {
             DateFilterBar(
-                startTs = dynamicViewModel.dateStart,
-                endTs = dynamicViewModel.dateEnd,
-                onPickStart = { showDatePicker = DatePickerTarget.Start },
-                onPickEnd = { showDatePicker = DatePickerTarget.End },
-                onClear = { dynamicViewModel.setDateRange(null, null) }
+                selectedDate = dynamicViewModel.selectedDate,
+                onShiftDate = { days -> dynamicViewModel.shiftDate(days) },
+                onPickDate = { showDatePicker = true },
+                onClear = { dynamicViewModel.setDate(null) }
             )
 
             if (!dynamicViewModel.isLogin) {
@@ -143,8 +144,7 @@ fun DynamicScreen(
                     Text(text = "请先登录")
                 }
             } else {
-                val hasFilter =
-                    dynamicViewModel.dateStart != null || dynamicViewModel.dateEnd != null
+                val hasFilter = dynamicViewModel.selectedDate != null
                 val filteredEmpty =
                     dynamicViewModel.filteredDynamicVideoList.isEmpty() && hasFilter
                 if (filteredEmpty && dynamicViewModel.loadingVideo) {
@@ -206,11 +206,11 @@ fun DynamicScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = "请放宽日期范围，或下拉加载更多动态",
+                                text = "请切换日期，或下拉加载更多动态",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            TextButton(onClick = { dynamicViewModel.setDateRange(null, null) }) {
+                            TextButton(onClick = { dynamicViewModel.setDate(null) }) {
                                 Text("清除筛选")
                             }
                         }
@@ -278,40 +278,24 @@ fun DynamicScreen(
         }
     }
 
-    val pickerTarget = showDatePicker
-    if (pickerTarget != null) {
-        val initialMillis = when (pickerTarget) {
-            DatePickerTarget.Start -> (dynamicViewModel.dateStart ?: System.currentTimeMillis() / 1000) * 1000L
-            DatePickerTarget.End -> (dynamicViewModel.dateEnd ?: System.currentTimeMillis() / 1000) * 1000L
-        }
+    if (showDatePicker) {
+        val initialMillis = (dynamicViewModel.selectedDate ?: System.currentTimeMillis() / 1000) * 1000L
         val pickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
         DatePickerDialog(
-            onDismissRequest = { showDatePicker = null },
+            onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
                     val millis = pickerState.selectedDateMillis
                     if (millis != null) {
-                        when (pickerTarget) {
-                            DatePickerTarget.Start -> {
-                                val newStart = startOfDaySeconds(millis)
-                                val end = dynamicViewModel.dateEnd
-                                dynamicViewModel.setDateRange(newStart, end)
-                                dynamicViewModel.autoLoadUntilFilterMatches()
-                            }
-
-                            DatePickerTarget.End -> {
-                                val newEnd = endOfDaySeconds(millis)
-                                val start = dynamicViewModel.dateStart
-                                dynamicViewModel.setDateRange(start, newEnd)
-                                dynamicViewModel.autoLoadUntilFilterMatches()
-                            }
-                        }
+                        val newDate = startOfDaySeconds(millis)
+                        dynamicViewModel.setDate(newDate)
+                        dynamicViewModel.autoLoadUntilFilterMatches()
                     }
-                    showDatePicker = null
+                    showDatePicker = false
                 }) { Text("确定") }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = null }) { Text("取消") }
+                TextButton(onClick = { showDatePicker = false }) { Text("取消") }
             }
         ) {
             DatePicker(state = pickerState)
@@ -321,10 +305,9 @@ fun DynamicScreen(
 
 @Composable
 private fun DateFilterBar(
-    startTs: Long?,
-    endTs: Long?,
-    onPickStart: () -> Unit,
-    onPickEnd: () -> Unit,
+    selectedDate: Long?,
+    onShiftDate: (days: Int) -> Unit,
+    onPickDate: () -> Unit,
     onClear: () -> Unit
 ) {
     val dateFormatter = remember {
@@ -332,39 +315,42 @@ private fun DateFilterBar(
             timeZone = TimeZone.getTimeZone("Asia/Shanghai")
         }
     }
-    val hasFilter = startTs != null || endTs != null
+    val hasFilter = selectedDate != null
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        FilledIconButton(
+            onClick = { onShiftDate(-1) },
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer
+            )
+        ) {
+            Icon(Icons.Default.ChevronLeft, contentDescription = "前一天")
+        }
         FilterChip(
-            selected = startTs != null,
-            onClick = onPickStart,
+            selected = hasFilter,
+            onClick = onPickDate,
             label = {
                 Text(
-                    text = startTs?.let { dateFormatter.format(Date(it * 1000L)) } ?: "开始日期"
+                    text = selectedDate?.let { dateFormatter.format(Date(it * 1000L)) } ?: "选择日期"
                 )
             },
             leadingIcon = {
                 Icon(Icons.Default.DateRange, contentDescription = null)
             }
         )
-        Text(text = "至", style = MaterialTheme.typography.bodyMedium)
-        FilterChip(
-            selected = endTs != null,
-            onClick = onPickEnd,
-            label = {
-                Text(
-                    text = endTs?.let { dateFormatter.format(Date(it * 1000L)) } ?: "结束日期"
-                )
-            },
-            leadingIcon = {
-                Icon(Icons.Default.DateRange, contentDescription = null)
-            }
-        )
+        FilledIconButton(
+            onClick = { onShiftDate(1) },
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer
+            )
+        ) {
+            Icon(Icons.Default.ChevronRight, contentDescription = "后一天")
+        }
         if (hasFilter) {
             TextButton(onClick = onClear) { Text("清除") }
         }
@@ -378,15 +364,5 @@ private fun startOfDaySeconds(millis: Long): Long {
     cal.set(java.util.Calendar.MINUTE, 0)
     cal.set(java.util.Calendar.SECOND, 0)
     cal.set(java.util.Calendar.MILLISECOND, 0)
-    return cal.timeInMillis / 1000L
-}
-
-private fun endOfDaySeconds(millis: Long): Long {
-    val cal = java.util.Calendar.getInstance(TimeZone.getTimeZone("Asia/Shanghai"))
-    cal.timeInMillis = millis
-    cal.set(java.util.Calendar.HOUR_OF_DAY, 23)
-    cal.set(java.util.Calendar.MINUTE, 59)
-    cal.set(java.util.Calendar.SECOND, 59)
-    cal.set(java.util.Calendar.MILLISECOND, 999)
     return cal.timeInMillis / 1000L
 }
