@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -48,7 +49,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.origeek.imageViewer.previewer.ImagePreviewerState
 import dev.aaa1115910.biliapi.entity.Picture
@@ -83,6 +87,10 @@ fun DynamicScreen(
     val windowSize = calculateWindowSizeClass(context as Activity).widthSizeClass
 
     val videoGridState = rememberLazyGridState()
+    // 切日期后滚回顶部
+    LaunchedEffect(dynamicViewModel.selectedDate) {
+        videoGridState.scrollToItem(0)
+    }
 
     LaunchedEffect(dynamicViewModel.isLogin) {
         if (dynamicViewModel.isLogin && dynamicViewModel.dynamicVideoList.isEmpty()) {
@@ -111,6 +119,8 @@ fun DynamicScreen(
 
     var showDatePicker by remember { mutableStateOf(false) }
     var menuTargetAid by remember { mutableStateOf<Long?>(null) }
+    // 三点按钮在屏幕里的位置（用 px 存，渲染时换 dp）
+    var menuAnchorPx by remember { mutableStateOf<Pair<Float, Float>?>(null) }
 
     Scaffold(
         modifier = modifier,
@@ -231,7 +241,19 @@ fun DynamicScreen(
                     contentPadding = PaddingValues(8.dp)
                 ) {
                     items(items = dynamicViewModel.filteredDynamicVideoList) { video ->
-                        Box {
+                        // 跟踪三点按钮的窗口坐标
+                        var moreIconWinX by remember { mutableStateOf(0f) }
+                        var moreIconWinY by remember { mutableStateOf(0f) }
+                        // LazyGrid item Box 的窗口坐标（用来换算 offset）
+                        var itemBoxWinX by remember { mutableStateOf(0f) }
+                        var itemBoxWinY by remember { mutableStateOf(0f) }
+                        Box(
+                            modifier = Modifier.onGloballyPositioned { coords ->
+                                val pos = coords.positionInWindow()
+                                itemBoxWinX = pos.x
+                                itemBoxWinY = pos.y
+                            }
+                        ) {
                             SmallVideoCard(
                                 modifier = Modifier
                                     .ifElse(
@@ -250,26 +272,50 @@ fun DynamicScreen(
                                     jumpToSeason = video.seasonId != null
                                 ),
                                 onClick = { onClickVideo(video) },
-                                onMore = { menuTargetAid = video.aid }
+                                onMore = { menuTargetAid = video.aid },
+                                onMorePositioned = { winX, winY ->
+                                    moreIconWinX = winX
+                                    moreIconWinY = winY
+                                }
                             )
-                            DropdownMenu(
-                                expanded = menuTargetAid == video.aid,
-                                onDismissRequest = { menuTargetAid = null }
+                            // 用 Popup 显示菜单，offset 相对当前 Box（item 的 wrapper）
+                            val density = androidx.compose.ui.platform.LocalDensity.current
+                            val expanded = menuTargetAid == video.aid
+                            androidx.compose.ui.window.Popup(
+                                alignment = androidx.compose.ui.Alignment.TopStart,
+                                offset = with(density) {
+                                    androidx.compose.ui.unit.IntOffset(
+                                        // 窗口坐标 - 父 Box 窗口坐标 = 相对父 Box 的偏移
+                                        x = (moreIconWinX - itemBoxWinX - 50.dp.toPx()).toInt(),
+                                        y = (moreIconWinY - itemBoxWinY + 8.dp.toPx()).toInt()
+                                    )
+                                }
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text("收藏") },
-                                    onClick = {
-                                        dynamicViewModel.addToFavorite(video.aid)
-                                        menuTargetAid = null
+                                androidx.compose.material3.Surface(
+                                    shape = MaterialTheme.shapes.medium,
+                                    shadowElevation = 8.dp,
+                                    color = MaterialTheme.colorScheme.surface,
+                                    modifier = Modifier.width(120.dp)
+                                ) {
+                                    if (expanded) {
+                                        Column {
+                                            androidx.compose.material3.DropdownMenuItem(
+                                                text = { Text("收藏") },
+                                                onClick = {
+                                                    dynamicViewModel.addToFavorite(video.aid)
+                                                    menuTargetAid = null
+                                                }
+                                            )
+                                            androidx.compose.material3.DropdownMenuItem(
+                                                text = { Text("稍后再看") },
+                                                onClick = {
+                                                    dynamicViewModel.addToWatchLater(video.aid)
+                                                    menuTargetAid = null
+                                                }
+                                            )
+                                        }
                                     }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("稍后再看") },
-                                    onClick = {
-                                        dynamicViewModel.addToWatchLater(video.aid)
-                                        menuTargetAid = null
-                                    }
-                                )
+                                }
                             }
                         }
                     }

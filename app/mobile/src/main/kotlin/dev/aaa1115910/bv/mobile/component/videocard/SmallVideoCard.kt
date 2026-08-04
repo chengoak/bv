@@ -29,6 +29,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -47,6 +49,7 @@ fun SmallVideoCard(
     data: VideoCardData,
     onClick: () -> Unit = {},
     onMore: (() -> Unit)? = null,
+    onMorePositioned: ((centerX: Float, centerY: Float) -> Unit)? = null,
 ) {
     Card(
         modifier = modifier,
@@ -142,7 +145,14 @@ fun SmallVideoCard(
                     }
                     if (onMore != null) {
                         IconButton(
-                            modifier = Modifier.size(28.dp),
+                            modifier = Modifier
+                                .size(28.dp)
+                                .onGloballyPositioned { coords ->
+                                    onMorePositioned?.let { callback ->
+                                        val pos = coords.positionInWindow()
+                                        callback(pos.x + coords.size.width / 2f, pos.y + coords.size.height / 2f)
+                                    }
+                                },
                             onClick = onMore
                         ) {
                             Icon(
