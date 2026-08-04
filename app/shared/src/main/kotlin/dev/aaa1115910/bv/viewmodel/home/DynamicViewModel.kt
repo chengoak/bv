@@ -71,6 +71,8 @@ class DynamicViewModel(
         val tz = java.util.TimeZone.getTimeZone("Asia/Shanghai")
         val base = selectedDate ?: startOfTodaySeconds(tz)
         selectedDate = base + days * 86400L
+        // 切换后自动加载更多页，直到找到匹配或翻完
+        autoLoadUntilFilterMatches()
     }
 
     /**
