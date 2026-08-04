@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
@@ -144,7 +145,27 @@ fun DynamicScreen(
             } else {
                 val hasFilter =
                     dynamicViewModel.dateStart != null || dynamicViewModel.dateEnd != null
-                if (dynamicViewModel.filteredDynamicVideoList.isEmpty() && hasFilter) {
+                val filteredEmpty =
+                    dynamicViewModel.filteredDynamicVideoList.isEmpty() && hasFilter
+                if (filteredEmpty && dynamicViewModel.loadingVideo) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.TopCenter
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(top = 48.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            CircularProgressIndicator()
+                            Text(
+                                text = "正在加载更多动态…",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else if (filteredEmpty) {
                     val loadedRange = remember(dynamicViewModel.dynamicVideoList) {
                         val pubs = dynamicViewModel.dynamicVideoList
                             .map { it.pubTs }
@@ -246,17 +267,6 @@ fun DynamicScreen(
                                     text = { Text("稍后再看") },
                                     onClick = {
                                         dynamicViewModel.addToWatchLater(video.aid)
-                                        menuTargetAid = null
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("在 哔哩哔哩 客户端打开") },
-                                    onClick = {
-                                        BilibiliIntent.openVideo(
-                                            context = context,
-                                            aid = video.aid,
-                                            bvid = video.bvid
-                                        )
                                         menuTargetAid = null
                                     }
                                 )

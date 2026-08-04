@@ -141,11 +141,11 @@ fun MobileMainScreen(
         }
 
     val verticalNavOrder = listOf(
-        MobileMainScreenNav.Home, MobileMainScreenNav.Dynamic,
+        MobileMainScreenNav.Dynamic, MobileMainScreenNav.Home,
         MobileMainScreenNav.Search
     ).map { it.name }
     val horizontalNavOrder = listOf(
-        MobileMainScreenNav.Home, MobileMainScreenNav.Dynamic,
+        MobileMainScreenNav.Dynamic, MobileMainScreenNav.Home,
         MobileMainScreenNav.Search,
     ).map { it.name }
 
@@ -235,7 +235,7 @@ fun MobileMainScreen(
         ) {
             NavHost(
                 navController = state.navController,
-                startDestination = MobileMainScreenNav.Home.name,
+                startDestination = MobileMainScreenNav.Dynamic.name,
                 enterTransition = navEnterTransition,
                 exitTransition = navExitTransition
             ) {
@@ -340,8 +340,8 @@ private fun NavigationSuit(
                 modifier = modifier
             ) {
                 listOf(
-                    MobileMainScreenNav.Home,
                     MobileMainScreenNav.Dynamic,
+                    MobileMainScreenNav.Home,
                     MobileMainScreenNav.Search,
                 ).forEach { navItem ->
                     item(
@@ -384,8 +384,8 @@ private fun NavigationSuit(
                 )
                 Spacer(Modifier.weight(1f))
                 listOf(
-                    MobileMainScreenNav.Home,
                     MobileMainScreenNav.Dynamic,
+                    MobileMainScreenNav.Home,
                     MobileMainScreenNav.Search,
                 ).forEach { navItem ->
                     NavigationRailItem(

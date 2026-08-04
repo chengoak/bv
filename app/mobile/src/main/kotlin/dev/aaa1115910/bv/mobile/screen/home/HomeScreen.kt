@@ -146,6 +146,7 @@ fun HomeScreenContent(
                             state = rcmdGridState,
                             windowSize = windowSize,
                             videos = recommendViewModel.recommendVideoList,
+                            recommendViewModel = recommendViewModel,
                             onClickVideo = { aid ->
                                 VideoPlayerActivity.actionStart(context = context, aid = aid)
                             },
@@ -177,6 +178,7 @@ fun HomeScreenContent(
                             state = popularGridState,
                             windowSize = windowSize,
                             videos = popularViewModel.popularVideoList,
+                            popularViewModel = popularViewModel,
                             onClickVideo = { aid ->
                                 VideoPlayerActivity.actionStart(context = context, aid = aid)
                             },
