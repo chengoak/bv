@@ -2,6 +2,8 @@ package dev.aaa1115910.bv.mobile.screen.home
 
 import android.app.Activity
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,6 +53,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -134,17 +139,20 @@ fun DynamicScreen(
         },
         containerColor = MaterialTheme.colorScheme.surfaceContainer
     ) { innerPadding ->
-        androidx.compose.foundation.layout.Column(
+        androidx.compose.foundation.layout.Box(
             modifier = Modifier
                 .padding(top = innerPadding.calculateTopPadding())
                 .fillMaxSize()
         ) {
-            DateFilterBar(
-                selectedDate = dynamicViewModel.selectedDate,
-                onShiftDate = { days -> dynamicViewModel.shiftDate(days) },
-                onPickDate = { showDatePicker = true },
-                onClear = { dynamicViewModel.setDate(null) }
-            )
+            androidx.compose.foundation.layout.Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                DateFilterBar(
+                    selectedDate = dynamicViewModel.selectedDate,
+                    onShiftDate = { days -> dynamicViewModel.shiftDate(days) },
+                    onPickDate = { showDatePicker = true },
+                    onClear = { dynamicViewModel.setDate(null) }
+                )
 
             if (!dynamicViewModel.isLogin) {
                 Box(
@@ -281,23 +289,23 @@ fun DynamicScreen(
                             // 用 Popup 显示菜单，offset 相对当前 Box（item 的 wrapper）
                             val density = androidx.compose.ui.platform.LocalDensity.current
                             val expanded = menuTargetAid == video.aid
-                            androidx.compose.ui.window.Popup(
-                                alignment = androidx.compose.ui.Alignment.TopStart,
-                                offset = with(density) {
-                                    androidx.compose.ui.unit.IntOffset(
-                                        // 窗口坐标 - 父 Box 窗口坐标 = 相对父 Box 的偏移
-                                        x = (moreIconWinX - itemBoxWinX - 50.dp.toPx()).toInt(),
-                                        y = (moreIconWinY - itemBoxWinY + 8.dp.toPx()).toInt()
-                                    )
-                                }
-                            ) {
-                                androidx.compose.material3.Surface(
-                                    shape = MaterialTheme.shapes.medium,
-                                    shadowElevation = 8.dp,
-                                    color = MaterialTheme.colorScheme.surface,
-                                    modifier = Modifier.width(120.dp)
+                            if (expanded) {
+                                androidx.compose.ui.window.Popup(
+                                    alignment = androidx.compose.ui.Alignment.TopStart,
+                                    offset = with(density) {
+                                        androidx.compose.ui.unit.IntOffset(
+                                            // 窗口坐标 - 父 Box 窗口坐标 = 相对父 Box 的偏移
+                                            x = (moreIconWinX - itemBoxWinX - 50.dp.toPx()).toInt(),
+                                            y = (moreIconWinY - itemBoxWinY + 8.dp.toPx()).toInt()
+                                        )
+                                    }
                                 ) {
-                                    if (expanded) {
+                                    androidx.compose.material3.Surface(
+                                        shape = MaterialTheme.shapes.medium,
+                                        shadowElevation = 8.dp,
+                                        color = MaterialTheme.colorScheme.surface,
+                                        modifier = Modifier.width(120.dp)
+                                    ) {
                                         Column {
                                             androidx.compose.material3.DropdownMenuItem(
                                                 text = { Text("收藏") },
@@ -320,6 +328,20 @@ fun DynamicScreen(
                         }
                     }
                 }
+            }
+            }
+            // 全屏点击遮罩：菜单打开时点其他位置关闭菜单（位于 outer Box 中、Column 之后，不挤压内容）
+            if (menuTargetAid != null) {
+                val scrimInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(
+                            interactionSource = scrimInteractionSource,
+                            indication = null,
+                            onClick = { menuTargetAid = null }
+                        )
+                )
             }
         }
     }
