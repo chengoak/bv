@@ -319,6 +319,20 @@ object Prefs {
             PlayMode.entries[dsm.getPreferenceFlow(PrefKeys.prefPlayModeRequest).first()]
         }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefPlayModeKey, value.ordinal) }
+
+    /**
+     * 动态页每日 scroll index 映射的 JSON 字符串。
+     * 结构: `{"<dayEpochSec>": <firstVisibleItemIndex>, ...}`
+     * 写入：DynamicViewModel 在切走日期前调用 setter。
+     * 读取：DynamicViewModel 在切到新日期时读取 saved index 决定是否 `scrollToItem`。
+     */
+    var dynamicScrollIndexMap: String
+        get() = runBlocking {
+            dsm.getPreferenceFlow(PrefKeys.prefDynamicScrollIndexMapRequest).first()
+        }
+        set(value) = runBlocking {
+            dsm.editPreference(PrefKeys.prefDynamicScrollIndexMapKey, value)
+        }
 }
 
 object PrefKeys {
@@ -365,6 +379,9 @@ object PrefKeys {
     val prefBlacklistUserKey = booleanPreferencesKey("blacklist_user")
     val prefThemeTypeKey = intPreferencesKey("theme_type")
     val prefPlayModeKey = intPreferencesKey("play_mode")
+    // 动态页每个日期对应的 LazyGrid firstVisibleItemIndex，JSON 字符串。
+    // key 是 epoch 秒（那天 0 点）；value 是 Int。结构: {"<day>": <index>, ...}
+    val prefDynamicScrollIndexMapKey = stringPreferencesKey("dynamic_scroll_index_map")
 
     val prefIsLoginRequest = PreferenceRequest(prefIsLoginKey, false)
     val prefUidRequest = PreferenceRequest(prefUidKey, 0)
@@ -423,4 +440,6 @@ object PrefKeys {
     val prefBlacklistUserRequest = PreferenceRequest(prefBlacklistUserKey, false)
     val prefThemeTypeRequest = PreferenceRequest(prefThemeTypeKey, ThemeType.Auto.ordinal)
     val prefPlayModeRequest = PreferenceRequest(prefPlayModeKey, PlayMode.Sequential.ordinal)
+    val prefDynamicScrollIndexMapRequest =
+        PreferenceRequest(prefDynamicScrollIndexMapKey, "")
 }

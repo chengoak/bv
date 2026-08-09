@@ -43,8 +43,26 @@ class DynamicViewModel(
     val dynamicVideoList = mutableStateListOf<DynamicVideo>()
     val dynamicAllList = mutableStateListOf<DynamicItem>()
 
-    // Single date filter (epoch seconds, start of day). null = no filter.
-    var selectedDate by mutableStateOf<Long?>(null)
+    // Single date filter (epoch seconds, start of day).
+    // Default: 今天 0 点（用户要求"打开订阅默认当天"）。
+    // 用 lazy 延迟初始化：构建时算一次，之后保持稳定（避免日期跨越午夜后页面 index 变化）。
+    private val tz = java.util.TimeZone.getTimeZone("Asia/Shanghai")
+    // 保留 by mutableStateOf 让 UI 跟随重组；构造默认值用 today。
+    var selectedDate by mutableStateOf<Long?>(startOfTodaySeconds(tz))
+        private set
+
+    // 当前 LazyGrid 的 firstVisibleItemIndex，由 UI 侧 LaunchedEffect 持续更新。
+    // 切日期时把 currentScrollIndex 持久化到 Prefs（带 selectedDate key），再读目标日期的 saved index 恢复。
+    var currentScrollIndex: Int = 0
+
+    /**
+     * 读取指定日期保存的 scroll index；没有就 0。
+     * 由 [setDate] / [shiftDate] / [clearDate] 切换目标日期后调用，决定是否 `scrollToItem`。
+     */
+    fun savedScrollIndexFor(day: Long): Int {
+        val map = loadScrollIndexMap()
+        return map[day] ?: 0
+    }
 
     val filteredDynamicVideoList by derivedStateOf {
         if (selectedDate == null) {
@@ -61,6 +79,8 @@ class DynamicViewModel(
     }
 
     fun setDate(date: Long?) {
+        // 切走前先把当前日期的 scroll index 存进 Prefs
+        selectedDate?.let { saveScrollIndexFor(it, currentScrollIndex) }
         selectedDate = date
     }
 
@@ -69,9 +89,8 @@ class DynamicViewModel(
      * 没选日期时基于「今天」偏移。
      */
     fun shiftDate(days: Int) {
-        val tz = java.util.TimeZone.getTimeZone("Asia/Shanghai")
         val base = selectedDate ?: startOfTodaySeconds(tz)
-        selectedDate = base + days * 86400L
+        setDate(base + days * 86400L)
         // 切换后自动加载更多页，直到找到匹配或翻完
         autoLoadUntilFilterMatches()
     }
@@ -287,5 +306,51 @@ class DynamicViewModel(
                 }
             }
         }
+    }
+
+    // ---------------- Scroll index 持久化 ----------------
+    //
+    // 目的：每个日期的 LazyGrid firstVisibleItemIndex 单独保留，切换日期能恢复。
+    // 存储：Prefs 里一个 JSON 字符串，key=日期 epoch 秒，value=index。
+    // 写入时机：[setDate] 切走时；读取时机：[savedScrollIndexFor] 由 UI 切完日期调用。
+
+    private fun loadScrollIndexMap(): MutableMap<Long, Int> {
+        val raw = runCatching { Prefs.dynamicScrollIndexMap }.getOrNull().orEmpty()
+        if (raw.isBlank()) return mutableMapOf()
+        return runCatching {
+            // 轻量 JSON：{"<day>": <index>, ...}，用正则解析避免引入新依赖。
+            // 格式严格，不抛就 OK。
+            val map = mutableMapOf<Long, Int>()
+            val re = Regex("\"(\\d+)\"\\s*:\\s*(-?\\d+)")
+            for (m in re.findAll(raw)) {
+                val k = m.groupValues[1].toLongOrNull() ?: continue
+                val v = m.groupValues[2].toIntOrNull() ?: continue
+                map[k] = v
+            }
+            map
+        }.getOrElse { mutableMapOf() }
+    }
+
+    private fun saveScrollIndexFor(day: Long, index: Int) {
+        val map = loadScrollIndexMap()
+        if (index <= 0) {
+            // 顶部位置没必要存（默认值就是 0），节省 Prefs 大小
+            map.remove(day)
+        } else {
+            map[day] = index
+        }
+        // 序列化成紧凑 JSON：{"<day>": <index>, ...}
+        val json = buildString {
+            append('{')
+            var first = true
+            for ((k, v) in map) {
+                if (!first) append(',')
+                append('"').append(k).append('"').append(':').append(v)
+                first = false
+            }
+            append('}')
+        }
+        runCatching { Prefs.dynamicScrollIndexMap = json }
+            .onFailure { logger.fWarn { "saveScrollIndexMap failed: ${it.stackTraceToString()}" } }
     }
 }

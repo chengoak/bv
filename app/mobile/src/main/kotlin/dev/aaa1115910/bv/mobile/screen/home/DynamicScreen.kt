@@ -48,6 +48,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -92,9 +93,21 @@ fun DynamicScreen(
     val windowSize = calculateWindowSizeClass(context as Activity).widthSizeClass
 
     val videoGridState = rememberLazyGridState()
-    // 切日期后滚回顶部
-    LaunchedEffect(dynamicViewModel.selectedDate) {
-        videoGridState.scrollToItem(0)
+    // 监听 firstVisibleItemIndex 变化，持续同步到 viewModel.currentScrollIndex。
+    // 这样切日期时 viewModel 能拿到当前 index 持久化。
+    LaunchedEffect(videoGridState, dynamicViewModel.selectedDate) {
+        // 切日期后立刻拿目标日期的 saved index；如果有就恢复，否则 0。
+        // 重要：selectedDate 变化时这个 block 会重新执行，所以新日期的 saved index 自然生效。
+        val targetDate = dynamicViewModel.selectedDate
+        val saved = targetDate?.let { dynamicViewModel.savedScrollIndexFor(it) } ?: 0
+        if (videoGridState.firstVisibleItemIndex != saved) {
+            videoGridState.scrollToItem(saved)
+        }
+        // 然后开始持续追踪 index 变化
+        snapshotFlow { videoGridState.firstVisibleItemIndex }
+            .collect { idx ->
+                dynamicViewModel.currentScrollIndex = idx
+            }
     }
 
     LaunchedEffect(dynamicViewModel.isLogin) {
