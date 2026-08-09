@@ -104,27 +104,23 @@ fun DynamicScreen(
     // 重要：不能在 size=0 时调 scrollToItem(saved)，那会污染 gridState.firstVisibleItemIndex，
     // 等 size 增长到包含 saved 时反而误判"已恢复"导致 noop。详见 LaunchedEffect(dynamicViewModel)。
     LaunchedEffect(dynamicViewModel.selectedDate) {
-        // 进入新日期（或启动后默认 today），等待列表加载完再恢复 saved index。
+        android.util.Log.d("DynamicRestore", "[A] selectedDate=${dynamicViewModel.selectedDate}")
+        // 进入新日期（或启动后默认 today），让 [B] launch effect 接管恢复逻辑。
+        // 关键：[A] 不要再"立即尝试"——filteredDynamicVideoList 还没更新到新日期，
+        // 立即 resolveRestoreIndex 会用旧 list 找新日期的 aid，找不到 → return 0 → 错跳。
+        // 只需重置 pendingRestore=true，剩下的让 [B] 等 list 非空 + notLoading 时统一处理。
         dynamicViewModel.pendingRestore = true
-        // 立即尝试一次：如果列表已经有数据就立刻恢复（用户切日期的常见场景）
-        if (dynamicViewModel.dynamicVideoList.isNotEmpty()) {
-            val target = dynamicViewModel.selectedDate?.let {
-                dynamicViewModel.resolveRestoreIndex(it, dynamicViewModel.filteredDynamicVideoList)
-            } ?: 0
-            if (videoGridState.firstVisibleItemIndex != target) {
-                scope.launch { videoGridState.animateScrollToItem(target) }
-            }
-            dynamicViewModel.pendingRestore = false
-        }
         // 持续追踪 index 变化同步到 viewModel（切走时持久化用）
         snapshotFlow { videoGridState.firstVisibleItemIndex }
             .collect { idx -> dynamicViewModel.currentScrollIndex = idx }
     }
-    // 杀进程重启场景：等 list 稳定后再恢复 saved index。
-    // 必须 list 稳定（不在 loading + 已加载完所有数据）才调，否则 autoLoad 改 size 后 LazyGrid 重 layout 滚回 0。
+    // 杀进程重启 / 切日期场景：等 list 稳定后恢复 saved index。
+    // 必须 list 稳定（不在 loading + filtered 已有数据 + saved 能 resolve）才调，
+    // 否则 autoLoad 改 size 后 LazyGrid 重 layout 滚回 0。
     // 用 animateScrollToItem 而不是 scrollToItem：瞬时版在 list 刚 grow 时不可靠。
     // gridState 的 index 对应 filteredDynamicVideoList 顺序。
-    LaunchedEffect(dynamicViewModel) {
+    // key 包含 selectedDate：切日期时重启这个 effect 触发新的恢复流程。
+    LaunchedEffect(dynamicViewModel, dynamicViewModel.selectedDate) {
         snapshotFlow {
             FilteredRestoreState(
                 filteredSize = dynamicViewModel.filteredDynamicVideoList.size,
@@ -133,16 +129,20 @@ fun DynamicScreen(
                 noMore = !dynamicViewModel.videoHasMore
             )
         }.collect { state ->
-            if (state.pending && state.filteredSize > 0 && state.notLoading) {
-                val targetDate = dynamicViewModel.selectedDate
-                val target = targetDate?.let {
-                    dynamicViewModel.resolveRestoreIndex(it, dynamicViewModel.filteredDynamicVideoList)
-                } ?: 0
-                if (videoGridState.firstVisibleItemIndex != target) {
-                    // await 等动画完成再清 pending，避免动画期间 list grow 干扰
-                    videoGridState.animateScrollToItem(target)
-                }
-                // 消费完就清掉
+            if (!state.notLoading) return@collect
+            val targetDate = dynamicViewModel.selectedDate ?: return@collect
+            // 持续尝试恢复，直到 saved position 真的 resolve（>=0）且 applied
+            if (state.filteredSize == 0) return@collect
+            val target = dynamicViewModel.resolveRestoreIndex(targetDate, dynamicViewModel.filteredDynamicVideoList)
+            if (target > 0 && videoGridState.firstVisibleItemIndex != target) {
+                videoGridState.animateScrollToItem(target)
+                // 只在 noMore 时清 pending，避免 list grow 时反复触发
+                if (state.noMore) dynamicViewModel.pendingRestore = false
+            } else if (target == 0 && state.filteredSize > 0 && !state.noMore) {
+                // target=0 可能因为 list 还没加载够（aid 不在当前 list），继续等 autoLoad
+                // 不清 pending
+            } else {
+                // target=0 且 noMore 说明真的没 saved 数据，停在顶部
                 dynamicViewModel.pendingRestore = false
             }
         }

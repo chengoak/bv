@@ -118,12 +118,14 @@ class DynamicViewModel(
     /**
      * 在当前选中日期上移动 [days] 天，可为负。
      * 没选日期时基于「今天」偏移。
+     *
+     * 切日期时不再预加载 N 页——预加载会让 list 在用户切回时还在 grow，
+     * LazyGrid 重 layout 时把已恢复的 firstVisibleItemIndex 推回 0。
+     * 改为：仅恢复现有数据里的 saved 位置；用户需要更多时由 LazyGrid OnBottomReached 自然触发 load。
      */
     fun shiftDate(days: Int) {
         val base = selectedDate ?: startOfTodaySeconds(tz)
         setDate(base + days * 86400L)
-        // 切换后自动加载更多页，直到找到匹配或翻完
-        autoLoadUntilFilterMatches()
     }
 
     /**
