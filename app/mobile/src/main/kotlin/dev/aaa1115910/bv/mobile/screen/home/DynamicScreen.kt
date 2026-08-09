@@ -111,22 +111,27 @@ fun DynamicScreen(
         snapshotFlow { videoGridState.firstVisibleItemIndex }
             .collect { idx -> dynamicViewModel.currentScrollIndex = idx }
     }
-    // 杀进程重启场景：列表从空开始加载，在 size > 0 且 pendingRestore=true 时真正做 animateScrollToItem。
-    // 关键：必须 size > 0 才能调，否则 gridState 记下无效的 firstVisibleItemIndex。
-    // 用 animateScrollToItem 而不是 scrollToItem：瞬时版在 list 刚 grow 时不会触发 layout。
+    // 杀进程重启场景：等 list 稳定（size > 0 且不在加载更多）后再恢复 saved index。
+    // 关键：必须 list 稳定才调，否则 autoLoad 改 size 后 LazyGrid 重 layout 滚回 0。
+    // 用 animateScrollToItem 而不是 scrollToItem：瞬时版在 list 刚 grow 时不可靠。
     LaunchedEffect(dynamicViewModel) {
-        snapshotFlow { dynamicViewModel.dynamicVideoList.size to dynamicViewModel.pendingRestore }
-            .collect { (size, pending) ->
-                if (pending && size > 0) {
-                    val targetDate = dynamicViewModel.selectedDate
-                    val saved = targetDate?.let { dynamicViewModel.savedScrollIndexFor(it) } ?: 0
-                    if (videoGridState.firstVisibleItemIndex != saved) {
-                        scope.launch { videoGridState.animateScrollToItem(saved) }
-                    }
-                    // 消费完就清掉，避免后续用户主动滚动被覆盖
-                    dynamicViewModel.pendingRestore = false
+        snapshotFlow {
+            Triple(
+                dynamicViewModel.dynamicVideoList.size,
+                dynamicViewModel.pendingRestore,
+                !dynamicViewModel.loadingVideo
+            )
+        }.collect { (size, pending, notLoading) ->
+            if (pending && size > 0 && notLoading) {
+                val targetDate = dynamicViewModel.selectedDate
+                val saved = targetDate?.let { dynamicViewModel.savedScrollIndexFor(it) } ?: 0
+                if (videoGridState.firstVisibleItemIndex != saved) {
+                    videoGridState.animateScrollToItem(saved)
                 }
+                // 消费完就清掉，避免后续用户主动滚动被覆盖
+                dynamicViewModel.pendingRestore = false
             }
+        }
     }
 
     LaunchedEffect(dynamicViewModel.isLogin) {

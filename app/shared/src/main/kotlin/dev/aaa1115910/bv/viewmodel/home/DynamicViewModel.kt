@@ -45,17 +45,13 @@ class DynamicViewModel(
 
     // Single date filter (epoch seconds, start of day).
     // Default: 今天 0 点（用户要求"打开订阅默认当天"）。
+    // 不持久化 selectedDate：杀进程后永远回到今天。
+    // 但每个日期的 scroll position 仍然持久化（切换/重启后切回某天能恢复）。
     // 用 lazy 延迟初始化：构建时算一次，之后保持稳定（避免日期跨越午夜后页面 index 变化）。
     private val tz = java.util.TimeZone.getTimeZone("Asia/Shanghai")
     // 保留 by mutableStateOf 让 UI 跟随重组；构造默认值用 today。
-    // 启动时优先从 Prefs 读取上次选中的日期，没有就用 today。
-    var selectedDate by mutableStateOf<Long?>(loadSelectedDateOrToday())
+    var selectedDate by mutableStateOf<Long?>(startOfTodaySeconds(tz))
         private set
-
-    private fun loadSelectedDateOrToday(): Long {
-        val saved = runCatching { Prefs.dynamicSelectedDate }.getOrNull() ?: 0L
-        return if (saved > 0L) saved else startOfTodaySeconds(tz)
-    }
 
     // 当前 LazyGrid 的 firstVisibleItemIndex，由 UI 侧 LaunchedEffect 持续更新。
     // 切日期时把 currentScrollIndex 持久化到 Prefs（带 selectedDate key），再读目标日期的 saved index 恢复。
@@ -95,8 +91,6 @@ class DynamicViewModel(
         // 切走前先把当前日期的 scroll index 存进 Prefs
         selectedDate?.let { saveScrollIndexFor(it, currentScrollIndex) }
         selectedDate = date
-        // 持久化选中的日期，杀进程重启能恢复（不然默认回 today）
-        runCatching { Prefs.dynamicSelectedDate = date ?: 0L }
         // 新日期进入后等列表加载完再恢复；flag 触发 UI 监听列表首次非空
         pendingRestore = true
     }
