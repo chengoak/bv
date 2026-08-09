@@ -65,12 +65,29 @@ class DynamicViewModel(
     var pendingRestore by mutableStateOf(true)
 
     /**
-     * 读取指定日期保存的 scroll index；没有就 0。
-     * 由 [setDate] / [shiftDate] / [clearDate] 切换目标日期后调用，决定是否 `scrollToItem`。
+     * 解析指定日期保存的滚动位置（{idx, aid}）。
+     * UI 切完日期/启动时调用，拿到后再决定恢复 index 还是按 aid 找当前 list index。
      */
-    fun savedScrollIndexFor(day: Long): Int {
+    fun savedScrollPositionFor(day: Long): ScrollPos? {
         val map = loadScrollIndexMap()
-        return map[day] ?: 0
+        return map[day]
+    }
+
+    /**
+     * 根据 saved pos + 当前 list，解析出应该 scrollToItem 的 index。
+     * 优先用 saved idx；若 idx 超出当前 filtered list 范围，则按 saved aid 找在 list 里的 index。
+     * 两者都不行就 0。
+     */
+    fun resolveRestoreIndex(day: Long, list: List<DynamicVideo>): Int {
+        val pos = savedScrollPositionFor(day) ?: return 0
+        if (pos.idx in 0 until list.size) {
+            return pos.idx
+        }
+        if (pos.aid != null) {
+            val found = list.indexOfFirst { it.aid == pos.aid }
+            if (found >= 0) return found
+        }
+        return 0
     }
 
     val filteredDynamicVideoList by derivedStateOf {
@@ -88,8 +105,11 @@ class DynamicViewModel(
     }
 
     fun setDate(date: Long?) {
-        // 切走前先把当前日期的 scroll index 存进 Prefs
-        selectedDate?.let { saveScrollIndexFor(it, currentScrollIndex) }
+        // 切走前先把当前日期的 scroll index + 顶部可见视频 aid 存进 Prefs
+        val currentList = filteredDynamicVideoList
+        val topAid = currentList.getOrNull(currentScrollIndex)?.aid
+            ?: currentList.firstOrNull()?.aid
+        selectedDate?.let { saveScrollIndexFor(it, currentScrollIndex, topAid) }
         selectedDate = date
         // 新日期进入后等列表加载完再恢复；flag 触发 UI 监听列表首次非空
         pendingRestore = true
@@ -120,7 +140,13 @@ class DynamicViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             var guard = 0
             while (guard < 50) {
-                if (filteredDynamicVideoList.isNotEmpty()) break
+                val filtered = filteredDynamicVideoList
+                if (filtered.isNotEmpty()) {
+                    // 如果当前 selectedDate 的 saved index >= filtered.size，
+                    // 说明需要加载更多页才能恢复到 saved 位置。一直 load 直到 filtered 数量超过 saved。
+                    val saved = savedScrollPositionFor(target)?.idx ?: 0
+                    if (saved < filtered.size) break
+                }
                 if (!videoHasMore) break
                 if (loadingVideo) {
                     // 上一次 loadVideoData 还没结束，等一会
@@ -165,7 +191,7 @@ class DynamicViewModel(
     init {
         println("=====init DynamicViewModel")
         // 持续监听 currentScrollIndex 变化，debounce 500ms 写 Prefs。
-        // 这样滚动中实时持久化，杀进程也不会丢失最新位置。
+        // 同时存顶部可见视频的 aid，恢复时用 aid 找在当前 list 的 index。
         viewModelScope.launch(Dispatchers.IO) {
             var lastWritten = -1
             var pendingWrite = false
@@ -175,7 +201,9 @@ class DynamicViewModel(
                     pendingWrite = true
                 }
                 if (pendingWrite) {
-                    saveScrollIndexFor(selectedDate ?: break, current)
+                    val list = filteredDynamicVideoList
+                    val topAid = list.getOrNull(current)?.aid ?: list.firstOrNull()?.aid
+                    saveScrollIndexFor(selectedDate ?: break, current, topAid)
                     lastWritten = current
                     pendingWrite = false
                     delay(500)
@@ -341,42 +369,60 @@ class DynamicViewModel(
 
     // ---------------- Scroll index 持久化 ----------------
     //
-    // 目的：每个日期的 LazyGrid firstVisibleItemIndex 单独保留，切换日期能恢复。
-    // 存储：Prefs 里一个 JSON 字符串，key=日期 epoch 秒，value=index。
-    // 写入时机：[setDate] 切走时；读取时机：[savedScrollIndexFor] 由 UI 切完日期调用。
+    // 目的：每个日期的 LazyGrid 滚动位置单独保留，切换日期能恢复。
+    // 存储：Prefs JSON 字符串，key=日期 epoch 秒，value=对象 {idx: Int, aid: Long}。
+    // 读取时：先按 idx 试；若 idx 超出当前 filtered list，再按 aid 找在 list 的 index（容错 B 站插队）。
+    // 写入：[setDate] 切走时、[currentScrollIndex] debounce 时存。
+    // 读取：[savedScrollIndexFor] UI 切完日期/启动时调。
 
-    private fun loadScrollIndexMap(): MutableMap<Long, Int> {
+    /** 解析后的滚动位置。 */
+    data class ScrollPos(val idx: Int, val aid: Long?)
+
+    private fun loadScrollIndexMap(): MutableMap<Long, ScrollPos> {
         val raw = runCatching { Prefs.dynamicScrollIndexMap }.getOrNull().orEmpty()
         if (raw.isBlank()) return mutableMapOf()
         return runCatching {
-            // 轻量 JSON：{"<day>": <index>, ...}，用正则解析避免引入新依赖。
-            // 格式严格，不抛就 OK。
-            val map = mutableMapOf<Long, Int>()
-            val re = Regex("\"(\\d+)\"\\s*:\\s*(-?\\d+)")
-            for (m in re.findAll(raw)) {
+            val map = mutableMapOf<Long, ScrollPos>()
+            // 匹配 "<day>": { "idx": N, "aid": M } 或 "<day>": N（旧格式：直接 int）
+            // 旧格式兼容：值是纯数字
+            val objRe = Regex("\"(\\d+)\"\\s*:\\s*\\{([^}]*)\\}")
+            for (m in objRe.findAll(raw)) {
                 val k = m.groupValues[1].toLongOrNull() ?: continue
+                val body = m.groupValues[2]
+                val idx = Regex("\"idx\"\\s*:\\s*(-?\\d+)").find(body)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                val aid = Regex("\"aid\"\\s*:\\s*(\\d+)").find(body)?.groupValues?.get(1)?.toLongOrNull()
+                map[k] = ScrollPos(idx, aid)
+            }
+            val plainRe = Regex("\"(\\d+)\"\\s*:\\s*(-?\\d+)")
+            for (m in plainRe.findAll(raw)) {
+                val k = m.groupValues[1].toLongOrNull() ?: continue
+                if (map.containsKey(k)) continue
                 val v = m.groupValues[2].toIntOrNull() ?: continue
-                map[k] = v
+                map[k] = ScrollPos(v, null)
             }
             map
         }.getOrElse { mutableMapOf() }
     }
 
-    private fun saveScrollIndexFor(day: Long, index: Int) {
+    private fun saveScrollIndexFor(day: Long, idx: Int, aid: Long?) {
         val map = loadScrollIndexMap()
-        if (index <= 0) {
-            // 顶部位置没必要存（默认值就是 0），节省 Prefs 大小
+        if (idx <= 0 && aid == null) {
             map.remove(day)
         } else {
-            map[day] = index
+            map[day] = ScrollPos(idx, aid)
         }
-        // 序列化成紧凑 JSON：{"<day>": <index>, ...}
         val json = buildString {
             append('{')
             var first = true
-            for ((k, v) in map) {
+            for ((k, pos) in map) {
                 if (!first) append(',')
-                append('"').append(k).append('"').append(':').append(v)
+                append('"').append(k).append('"').append(':')
+                append('{')
+                append('"').append("idx").append('"').append(':').append(pos.idx)
+                if (pos.aid != null) {
+                    append(',').append('"').append("aid").append('"').append(':').append(pos.aid)
+                }
+                append('}')
                 first = false
             }
             append('}')

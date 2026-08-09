@@ -78,6 +78,13 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
+private data class FilteredRestoreState(
+    val filteredSize: Int,
+    val pending: Boolean,
+    val notLoading: Boolean,
+    val noMore: Boolean
+)
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 fun DynamicScreen(
@@ -101,9 +108,11 @@ fun DynamicScreen(
         dynamicViewModel.pendingRestore = true
         // 立即尝试一次：如果列表已经有数据就立刻恢复（用户切日期的常见场景）
         if (dynamicViewModel.dynamicVideoList.isNotEmpty()) {
-            val saved = dynamicViewModel.selectedDate?.let { dynamicViewModel.savedScrollIndexFor(it) } ?: 0
-            if (videoGridState.firstVisibleItemIndex != saved) {
-                scope.launch { videoGridState.animateScrollToItem(saved) }
+            val target = dynamicViewModel.selectedDate?.let {
+                dynamicViewModel.resolveRestoreIndex(it, dynamicViewModel.filteredDynamicVideoList)
+            } ?: 0
+            if (videoGridState.firstVisibleItemIndex != target) {
+                scope.launch { videoGridState.animateScrollToItem(target) }
             }
             dynamicViewModel.pendingRestore = false
         }
@@ -111,24 +120,29 @@ fun DynamicScreen(
         snapshotFlow { videoGridState.firstVisibleItemIndex }
             .collect { idx -> dynamicViewModel.currentScrollIndex = idx }
     }
-    // 杀进程重启场景：等 list 稳定（size > 0 且不在加载更多）后再恢复 saved index。
-    // 关键：必须 list 稳定才调，否则 autoLoad 改 size 后 LazyGrid 重 layout 滚回 0。
+    // 杀进程重启场景：等 list 稳定后再恢复 saved index。
+    // 必须 list 稳定（不在 loading + 已加载完所有数据）才调，否则 autoLoad 改 size 后 LazyGrid 重 layout 滚回 0。
     // 用 animateScrollToItem 而不是 scrollToItem：瞬时版在 list 刚 grow 时不可靠。
+    // gridState 的 index 对应 filteredDynamicVideoList 顺序。
     LaunchedEffect(dynamicViewModel) {
         snapshotFlow {
-            Triple(
-                dynamicViewModel.dynamicVideoList.size,
-                dynamicViewModel.pendingRestore,
-                !dynamicViewModel.loadingVideo
+            FilteredRestoreState(
+                filteredSize = dynamicViewModel.filteredDynamicVideoList.size,
+                pending = dynamicViewModel.pendingRestore,
+                notLoading = !dynamicViewModel.loadingVideo,
+                noMore = !dynamicViewModel.videoHasMore
             )
-        }.collect { (size, pending, notLoading) ->
-            if (pending && size > 0 && notLoading) {
+        }.collect { state ->
+            if (state.pending && state.filteredSize > 0 && state.notLoading) {
                 val targetDate = dynamicViewModel.selectedDate
-                val saved = targetDate?.let { dynamicViewModel.savedScrollIndexFor(it) } ?: 0
-                if (videoGridState.firstVisibleItemIndex != saved) {
-                    videoGridState.animateScrollToItem(saved)
+                val target = targetDate?.let {
+                    dynamicViewModel.resolveRestoreIndex(it, dynamicViewModel.filteredDynamicVideoList)
+                } ?: 0
+                if (videoGridState.firstVisibleItemIndex != target) {
+                    // await 等动画完成再清 pending，避免动画期间 list grow 干扰
+                    videoGridState.animateScrollToItem(target)
                 }
-                // 消费完就清掉，避免后续用户主动滚动被覆盖
+                // 消费完就清掉
                 dynamicViewModel.pendingRestore = false
             }
         }
@@ -138,6 +152,9 @@ fun DynamicScreen(
         if (dynamicViewModel.isLogin && dynamicViewModel.dynamicVideoList.isEmpty()) {
             scope.launch(Dispatchers.IO) {
                 dynamicViewModel.loadMoreVideo()
+                // 登录后若有 saved index 且 selectedDate 已被持久化，
+                // 持续 autoLoad 直到 filtered 数量超过 saved，保证恢复能生效。
+                dynamicViewModel.autoLoadUntilFilterMatches()
             }
         }
     }
