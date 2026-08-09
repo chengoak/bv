@@ -48,12 +48,25 @@ class DynamicViewModel(
     // 用 lazy 延迟初始化：构建时算一次，之后保持稳定（避免日期跨越午夜后页面 index 变化）。
     private val tz = java.util.TimeZone.getTimeZone("Asia/Shanghai")
     // 保留 by mutableStateOf 让 UI 跟随重组；构造默认值用 today。
-    var selectedDate by mutableStateOf<Long?>(startOfTodaySeconds(tz))
+    // 启动时优先从 Prefs 读取上次选中的日期，没有就用 today。
+    var selectedDate by mutableStateOf<Long?>(loadSelectedDateOrToday())
         private set
+
+    private fun loadSelectedDateOrToday(): Long {
+        val saved = runCatching { Prefs.dynamicSelectedDate }.getOrNull() ?: 0L
+        return if (saved > 0L) saved else startOfTodaySeconds(tz)
+    }
 
     // 当前 LazyGrid 的 firstVisibleItemIndex，由 UI 侧 LaunchedEffect 持续更新。
     // 切日期时把 currentScrollIndex 持久化到 Prefs（带 selectedDate key），再读目标日期的 saved index 恢复。
     var currentScrollIndex: Int = 0
+
+    // 首次列表非空且 selectedDate 有 saved index > 0 时，让 UI 重新跑一次 scrollToItem(saved)。
+    // 进程被系统杀后重启时，列表从空开始加载，LaunchedEffect(selectedDate) 在空列表上调
+    // scrollToItem 是 noop，saved index 会丢失。这个 flag 触发 UI 重新恢复。
+    // 用户主动切日期时这个 flag 也置 true。
+    // 注意：必须 by mutableStateOf，UI 用 snapshotFlow 监听，写后才会触发重组。
+    var pendingRestore by mutableStateOf(true)
 
     /**
      * 读取指定日期保存的 scroll index；没有就 0。
@@ -82,6 +95,10 @@ class DynamicViewModel(
         // 切走前先把当前日期的 scroll index 存进 Prefs
         selectedDate?.let { saveScrollIndexFor(it, currentScrollIndex) }
         selectedDate = date
+        // 持久化选中的日期，杀进程重启能恢复（不然默认回 today）
+        runCatching { Prefs.dynamicSelectedDate = date ?: 0L }
+        // 新日期进入后等列表加载完再恢复；flag 触发 UI 监听列表首次非空
+        pendingRestore = true
     }
 
     /**
@@ -153,6 +170,26 @@ class DynamicViewModel(
 
     init {
         println("=====init DynamicViewModel")
+        // 持续监听 currentScrollIndex 变化，debounce 500ms 写 Prefs。
+        // 这样滚动中实时持久化，杀进程也不会丢失最新位置。
+        viewModelScope.launch(Dispatchers.IO) {
+            var lastWritten = -1
+            var pendingWrite = false
+            while (true) {
+                val current = currentScrollIndex
+                if (current > 0 && current != lastWritten && selectedDate != null) {
+                    pendingWrite = true
+                }
+                if (pendingWrite) {
+                    saveScrollIndexFor(selectedDate ?: break, current)
+                    lastWritten = current
+                    pendingWrite = false
+                    delay(500)
+                } else {
+                    delay(100)
+                }
+            }
+        }
     }
 
     suspend fun loadMoreVideo() {

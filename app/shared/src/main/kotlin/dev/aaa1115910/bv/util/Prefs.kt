@@ -333,6 +333,14 @@ object Prefs {
         set(value) = runBlocking {
             dsm.editPreference(PrefKeys.prefDynamicScrollIndexMapKey, value)
         }
+
+    var dynamicSelectedDate: Long
+        get() = runBlocking {
+            dsm.getPreferenceFlow(PrefKeys.prefDynamicSelectedDateRequest).first()
+        }
+        set(value) = runBlocking {
+            dsm.editPreference(PrefKeys.prefDynamicSelectedDateKey, value)
+        }
 }
 
 object PrefKeys {
@@ -382,6 +390,7 @@ object PrefKeys {
     // 动态页每个日期对应的 LazyGrid firstVisibleItemIndex，JSON 字符串。
     // key 是 epoch 秒（那天 0 点）；value 是 Int。结构: {"<day>": <index>, ...}
     val prefDynamicScrollIndexMapKey = stringPreferencesKey("dynamic_scroll_index_map")
+    val prefDynamicSelectedDateKey = longPreferencesKey("dynamic_selected_date")
 
     val prefIsLoginRequest = PreferenceRequest(prefIsLoginKey, false)
     val prefUidRequest = PreferenceRequest(prefUidKey, 0)
@@ -442,4 +451,6 @@ object PrefKeys {
     val prefPlayModeRequest = PreferenceRequest(prefPlayModeKey, PlayMode.Sequential.ordinal)
     val prefDynamicScrollIndexMapRequest =
         PreferenceRequest(prefDynamicScrollIndexMapKey, "")
+    val prefDynamicSelectedDateRequest =
+        PreferenceRequest(prefDynamicSelectedDateKey, 0L)
 }

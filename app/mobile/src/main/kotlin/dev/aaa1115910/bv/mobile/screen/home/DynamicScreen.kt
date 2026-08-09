@@ -93,20 +93,39 @@ fun DynamicScreen(
     val windowSize = calculateWindowSizeClass(context as Activity).widthSizeClass
 
     val videoGridState = rememberLazyGridState()
-    // 监听 firstVisibleItemIndex 变化，持续同步到 viewModel.currentScrollIndex。
-    // 这样切日期时 viewModel 能拿到当前 index 持久化。
-    LaunchedEffect(videoGridState, dynamicViewModel.selectedDate) {
-        // 切日期后立刻拿目标日期的 saved index；如果有就恢复，否则 0。
-        // 重要：selectedDate 变化时这个 block 会重新执行，所以新日期的 saved index 自然生效。
-        val targetDate = dynamicViewModel.selectedDate
-        val saved = targetDate?.let { dynamicViewModel.savedScrollIndexFor(it) } ?: 0
-        if (videoGridState.firstVisibleItemIndex != saved) {
-            videoGridState.scrollToItem(saved)
+    // selectedDate 变化时只负责重置 pendingRestore = true，让"列表非空时恢复" LaunchedEffect 接管。
+    // 重要：不能在 size=0 时调 scrollToItem(saved)，那会污染 gridState.firstVisibleItemIndex，
+    // 等 size 增长到包含 saved 时反而误判"已恢复"导致 noop。详见 LaunchedEffect(dynamicViewModel)。
+    LaunchedEffect(dynamicViewModel.selectedDate) {
+        // 进入新日期（或启动后默认 today），等待列表加载完再恢复 saved index。
+        dynamicViewModel.pendingRestore = true
+        // 立即尝试一次：如果列表已经有数据就立刻恢复（用户切日期的常见场景）
+        if (dynamicViewModel.dynamicVideoList.isNotEmpty()) {
+            val saved = dynamicViewModel.selectedDate?.let { dynamicViewModel.savedScrollIndexFor(it) } ?: 0
+            if (videoGridState.firstVisibleItemIndex != saved) {
+                scope.launch { videoGridState.animateScrollToItem(saved) }
+            }
+            dynamicViewModel.pendingRestore = false
         }
-        // 然后开始持续追踪 index 变化
+        // 持续追踪 index 变化同步到 viewModel（切走时持久化用）
         snapshotFlow { videoGridState.firstVisibleItemIndex }
-            .collect { idx ->
-                dynamicViewModel.currentScrollIndex = idx
+            .collect { idx -> dynamicViewModel.currentScrollIndex = idx }
+    }
+    // 杀进程重启场景：列表从空开始加载，在 size > 0 且 pendingRestore=true 时真正做 animateScrollToItem。
+    // 关键：必须 size > 0 才能调，否则 gridState 记下无效的 firstVisibleItemIndex。
+    // 用 animateScrollToItem 而不是 scrollToItem：瞬时版在 list 刚 grow 时不会触发 layout。
+    LaunchedEffect(dynamicViewModel) {
+        snapshotFlow { dynamicViewModel.dynamicVideoList.size to dynamicViewModel.pendingRestore }
+            .collect { (size, pending) ->
+                if (pending && size > 0) {
+                    val targetDate = dynamicViewModel.selectedDate
+                    val saved = targetDate?.let { dynamicViewModel.savedScrollIndexFor(it) } ?: 0
+                    if (videoGridState.firstVisibleItemIndex != saved) {
+                        scope.launch { videoGridState.animateScrollToItem(saved) }
+                    }
+                    // 消费完就清掉，避免后续用户主动滚动被覆盖
+                    dynamicViewModel.pendingRestore = false
+                }
             }
     }
 
