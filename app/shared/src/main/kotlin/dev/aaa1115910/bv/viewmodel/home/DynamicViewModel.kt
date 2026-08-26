@@ -235,17 +235,24 @@ class DynamicViewModel(
                 updateBaseline = videoUpdateBaseline ?: "",
                 preferApiType = Prefs.apiType
             )
-            dynamicVideoList.addAllWithMainContext(dynamicVideoData.videos)
+            // B 站 dynVideo API 偶尔会返回重复 aid（直播预约+回放、置顶+普通位等），
+            // 不去重会让同一视频在 UI 上重复出现。维护一个已加载 aid set，addAll 前过滤。
+            val existingAids = dynamicVideoList.asSequence().map { it.aid }.toHashSet()
+            val newVideos = dynamicVideoData.videos.filter { it.aid !in existingAids }
+            if (newVideos.size < dynamicVideoData.videos.size) {
+                logger.fInfo { "Filtered out ${dynamicVideoData.videos.size - newVideos.size} duplicate aid(s) on page $currentVideoPage" }
+            }
+            dynamicVideoList.addAllWithMainContext(newVideos)
             videoHistoryOffset = dynamicVideoData.historyOffset
             videoUpdateBaseline = dynamicVideoData.updateBaseline
             videoHasMore = dynamicVideoData.hasMore
 
-            logger.fInfo { "Load dynamic video list page: ${currentVideoPage},size: ${dynamicVideoData.videos.size}" }
-            val avList = dynamicVideoData.videos.map {
+            logger.fInfo { "Load dynamic video list page: $currentVideoPage,size: ${newVideos.size}" }
+            val avList = newVideos.map {
                 it.aid
             }
             logger.fInfo { "Load dynamic video size: ${avList.size}" }
-            logger.info { "Load dynamic video list ${avList}}" }
+            logger.info { "Load dynamic video list ${avList}" }
         }.onFailure {
             logger.fWarn { "Load dynamic video list failed: ${it.stackTraceToString()}" }
             when (it) {
@@ -271,20 +278,27 @@ class DynamicViewModel(
     private suspend fun loadAllData() {
         if (!allHasMore || !bvUserRepository.isLogin) return
         loadingAll = true
-        logger.fInfo { "Load more dynamic all [apiType=${Prefs.apiType}, offset=$allHistoryOffset, page=${currentVideoPage + 1}]" }
+        logger.fInfo { "Load more dynamic all [apiType=${Prefs.apiType}, offset=$allHistoryOffset, page=${currentAllPage + 1}]" }
         runCatching {
             val dynamicData = userRepository.getDynamics(
-                page = ++currentVideoPage,
+                page = ++currentAllPage,
                 offset = allHistoryOffset ?: "",
                 updateBaseline = allUpdateBaseline ?: "",
                 preferApiType = Prefs.apiType
             )
-            dynamicAllList.addAll(dynamicData.dynamics)
+            // 同样去重：commentId 是 B 站动态唯一 ID，用它做 set key 最稳
+            val existingCommentIds = dynamicAllList.asSequence()
+                .map { it.commentId }.toHashSet()
+            val newDynamics = dynamicData.dynamics.filter { it.commentId !in existingCommentIds }
+            if (newDynamics.size < dynamicData.dynamics.size) {
+                logger.fInfo { "Filtered out ${dynamicData.dynamics.size - newDynamics.size} duplicate dynamic(s) on page $currentAllPage" }
+            }
+            dynamicAllList.addAll(newDynamics)
             allHistoryOffset = dynamicData.historyOffset
             allUpdateBaseline = dynamicData.updateBaseline
             allHasMore = dynamicData.hasMore
 
-            logger.fInfo { "Load dynamic all list page: ${currentVideoPage},size: ${dynamicData.dynamics.size}" }
+            logger.fInfo { "Load dynamic all list page: $currentAllPage,size: ${newDynamics.size}" }
         }.onFailure {
             logger.fWarn { "Load dynamic all list failed: ${it.stackTraceToString()}" }
             when (it) {
